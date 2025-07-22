@@ -11,8 +11,11 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import BottomNav from '../../../components/BottomNavbar';
+import { useAppContext } from '../../../_customContext/AppProvider';
 
 export default function MyListingsScreen({ navigation }) {
+      const {showOverlay, setShowOverlay} = useAppContext()
+
   const [activeMenuId, setActiveMenuId] = useState(null);
   return (
     <>
@@ -26,7 +29,7 @@ export default function MyListingsScreen({ navigation }) {
               <Text style={styles.headerTitle}>My Listings</Text>
               <Text style={styles.headerSubtitle}>2 machines listed</Text>
             </View>
-            <TouchableOpacity style={styles.addButton}>
+            <TouchableOpacity style={styles.addButton} onPress={()=>setShowOverlay(true)}>
               <Icon name="plus" size={16} color="#fff" />
               <Text style={styles.addButtonText}>Add New</Text>
             </TouchableOpacity>
@@ -149,7 +152,7 @@ export default function MyListingsScreen({ navigation }) {
           ))}
         </View>
       </ScrollView>
-      <BottomNav navigation={navigation} />
+      <BottomNav setShowOverlay={setShowOverlay} navigation={navigation}/>
       <Modal
         isVisible={activeMenuId !== null}
         onBackdropPress={() => setActiveMenuId(null)}

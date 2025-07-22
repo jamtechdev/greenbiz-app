@@ -12,8 +12,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context'; // SafeAreaView for Header Only
 import Icon from 'react-native-vector-icons/Feather';
+import { useAppContext } from '../../../_customContext/AppProvider';
+import BottomNav from '../../../components/BottomNavbar';
 
-export default function DetailsScreen({ initialImageUri }) {
+export default function DetailsScreen({ route, navigation }) {
+  const { image } = route.params;
+  const { setShowOverlay, selectedImage } = useAppContext();
+  // console.log(image)
   const [fields, setFields] = useState({
     title: { value: 'CAT 320 Excavator', editing: false },
     brand: { value: 'Caterpillar', editing: false },
@@ -26,128 +31,187 @@ export default function DetailsScreen({ initialImageUri }) {
     },
   });
 
-  const [imageUri] = useState(initialImageUri);
+  // const [imageUri] = useState(image);
 
-  const onEditPress = key => {
-    setFields(prev => ({
+  const onEditPress = (key) => {
+    setFields((prev) => ({
       ...prev,
       [key]: { ...prev[key], editing: true },
     }));
   };
 
-  const onBlur = key => {
-    setFields(prev => ({
+  const onBlur = (key) => {
+    setFields((prev) => ({
       ...prev,
       [key]: { ...prev[key], editing: false },
     }));
   };
 
   const onChangeText = (key, text) => {
-    setFields(prev => ({
+    setFields((prev) => ({
       ...prev,
       [key]: { ...prev[key], value: text },
     }));
   };
 
   return (
-    <ScrollView style={styles.page}>
-      {/* Header with SafeAreaView */}
-      <SafeAreaView style={styles.headerSafeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton}>
-            <Icon name="arrow-left" size={20} color="#f0f0f0" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>AI Analysis Results</Text>
-        </View>
-      </SafeAreaView>
-
-      {/* Image Card */}
-      <View style={styles.card}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.image} />
-        ) : (
-          <View style={[styles.image, styles.imagePlaceholder]}>
-            <Text style={{ color: '#999' }}>No Image</Text>
+    <View style={styles.container}>
+      {/* Content Section */}
+      <ScrollView
+        contentContainerStyle={styles.page}
+        style={styles.scrollView}
+        keyboardShouldPersistTaps="handled">
+        {/* Header with SafeAreaView */}
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.navigate('Dashboard')}>
+              <Icon name="arrow-left" size={20} color="#f0f0f0" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>AI Analysis Results</Text>
           </View>
-        )}
-      </View>
+        </SafeAreaView>
 
-      {/* Machine Details Card */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Machine Details</Text>
-
-        {/* Title */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Title</Text>
-          <View style={styles.inputRow}>
-            {fields.title.editing ? (
-              <TextInput
-                style={styles.input}
-                value={fields.title.value}
-                onChangeText={text => onChangeText('title', text)}
-                onBlur={() => onBlur('title')}
-                autoFocus
-              />
-            ) : (
-              <Text style={styles.valueText}>{fields.title.value}</Text>
-            )}
-            {!fields.title.editing && (
-              <TouchableOpacity
-                onPress={() => onEditPress('title')}
-                style={styles.editBtn}
-              >
-                <Icon name="edit-2" size={16} color="#4f46e5" />
-              </TouchableOpacity>
-            )}
-          </View>
+        {/* Image Card */}
+        <View style={styles.card}>
+          {image ? (
+            <Image source={{ uri: image }} style={styles.image} />
+          ) : (
+            <View style={[styles.image, styles.imagePlaceholder]}>
+              <Text style={{ color: '#999' }}>No Image</Text>
+            </View>
+          )}
         </View>
 
-        {/* Brand & Model Row */}
-        <View style={styles.row}>
-          <View style={[styles.fieldGroup, styles.halfWidth]}>
-            <Text style={styles.label}>Brand</Text>
+        {/* Machine Details Card */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Machine Details</Text>
+
+          {/* Title */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Title</Text>
             <View style={styles.inputRow}>
-              {fields.brand.editing ? (
+              {fields.title.editing ? (
                 <TextInput
                   style={styles.input}
-                  value={fields.brand.value}
-                  onChangeText={text => onChangeText('brand', text)}
-                  onBlur={() => onBlur('brand')}
+                  value={fields.title.value}
+                  onChangeText={(text) => onChangeText('title', text)}
+                  onBlur={() => onBlur('title')}
                   autoFocus
                 />
               ) : (
-                <Text style={styles.valueText}>{fields.brand.value}</Text>
+                <Text style={styles.valueText}>{fields.title.value}</Text>
               )}
-              {!fields.brand.editing && (
+              {!fields.title.editing && (
                 <TouchableOpacity
-                  onPress={() => onEditPress('brand')}
-                  style={styles.editBtn}
-                >
+                  onPress={() => onEditPress('title')}
+                  style={styles.editBtn}>
                   <Icon name="edit-2" size={16} color="#4f46e5" />
                 </TouchableOpacity>
               )}
             </View>
           </View>
 
-          <View style={[styles.fieldGroup, styles.halfWidth]}>
-            <Text style={styles.label}>Model</Text>
+          {/* Brand & Model Row */}
+          <View style={styles.row}>
+            <View style={[styles.fieldGroup, styles.halfWidth]}>
+              <Text style={styles.label}>Brand</Text>
+              <View style={styles.inputRow}>
+                {fields.brand.editing ? (
+                  <TextInput
+                    style={styles.input}
+                    value={fields.brand.value}
+                    onChangeText={(text) => onChangeText('brand', text)}
+                    onBlur={() => onBlur('brand')}
+                    autoFocus
+                  />
+                ) : (
+                  <Text style={styles.valueText}>{fields.brand.value}</Text>
+                )}
+                {!fields.brand.editing && (
+                  <TouchableOpacity
+                    onPress={() => onEditPress('brand')}
+                    style={styles.editBtn}>
+                    <Icon name="edit-2" size={16} color="#4f46e5" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <View style={[styles.fieldGroup, styles.halfWidth]}>
+              <Text style={styles.label}>Model</Text>
+              <View style={styles.inputRow}>
+                {fields.model.editing ? (
+                  <TextInput
+                    style={styles.input}
+                    value={fields.model.value}
+                    onChangeText={(text) => onChangeText('model', text)}
+                    onBlur={() => onBlur('model')}
+                    autoFocus
+                  />
+                ) : (
+                  <Text style={styles.valueText}>{fields.model.value}</Text>
+                )}
+                {!fields.model.editing && (
+                  <TouchableOpacity
+                    onPress={() => onEditPress('model')}
+                    style={styles.editBtn}>
+                    <Icon name="edit-2" size={16} color="#4f46e5" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Year */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Year</Text>
             <View style={styles.inputRow}>
-              {fields.model.editing ? (
+              {fields.year.editing ? (
                 <TextInput
                   style={styles.input}
-                  value={fields.model.value}
-                  onChangeText={text => onChangeText('model', text)}
-                  onBlur={() => onBlur('model')}
+                  value={fields.year.value}
+                  onChangeText={(text) => onChangeText('year', text)}
+                  onBlur={() => onBlur('year')}
+                  autoFocus
+                  keyboardType="numeric"
+                />
+              ) : (
+                <Text style={styles.valueText}>{fields.year.value}</Text>
+              )}
+              {!fields.year.editing && (
+                <TouchableOpacity
+                  onPress={() => onEditPress('year')}
+                  style={styles.editBtn}>
+                  <Icon name="edit-2" size={16} color="#4f46e5" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Description */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Description</Text>
+            <View style={[styles.inputRow, { alignItems: 'flex-start' }]}>
+              {fields.description.editing ? (
+                <TextInput
+                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+                  multiline
+                  value={fields.description.value}
+                  onChangeText={(text) => onChangeText('description', text)}
+                  onBlur={() => onBlur('description')}
                   autoFocus
                 />
               ) : (
-                <Text style={styles.valueText}>{fields.model.value}</Text>
+                <Text style={[styles.valueText, { minHeight: 80 }]}>
+                  {fields.description.value}
+                </Text>
               )}
-              {!fields.model.editing && (
+              {!fields.description.editing && (
                 <TouchableOpacity
-                  onPress={() => onEditPress('model')}
-                  style={styles.editBtn}
-                >
+                  onPress={() => onEditPress('description')}
+                  style={[styles.editBtn, { marginTop: 6 }]}>
                   <Icon name="edit-2" size={16} color="#4f46e5" />
                 </TouchableOpacity>
               )}
@@ -155,85 +219,41 @@ export default function DetailsScreen({ initialImageUri }) {
           </View>
         </View>
 
-        {/* Year */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Year</Text>
-          <View style={styles.inputRow}>
-            {fields.year.editing ? (
-              <TextInput
-                style={styles.input}
-                value={fields.year.value}
-                onChangeText={text => onChangeText('year', text)}
-                onBlur={() => onBlur('year')}
-                autoFocus
-                keyboardType="numeric"
-              />
-            ) : (
-              <Text style={styles.valueText}>{fields.year.value}</Text>
-            )}
-            {!fields.year.editing && (
-              <TouchableOpacity
-                onPress={() => onEditPress('year')}
-                style={styles.editBtn}
-              >
-                <Icon name="edit-2" size={16} color="#4f46e5" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+        {/* Continue Button */}
+        <TouchableOpacity
+          style={styles.continueButton}
+          onPress={() => navigation.navigate('Login')}>
+          <Icon name="check" size={20} color="#e0e0e0" />
+          <Text style={styles.continueButtonText}>Continue to Submit</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
-        {/* Description */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Description</Text>
-          <View style={[styles.inputRow, { alignItems: 'flex-start' }]}>
-            {fields.description.editing ? (
-              <TextInput
-                style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-                multiline
-                value={fields.description.value}
-                onChangeText={text => onChangeText('description', text)}
-                onBlur={() => onBlur('description')}
-                autoFocus
-              />
-            ) : (
-              <Text style={[styles.valueText, { minHeight: 80 }]}>
-                {fields.description.value}
-              </Text>
-            )}
-            {!fields.description.editing && (
-              <TouchableOpacity
-                onPress={() => onEditPress('description')}
-                style={[styles.editBtn, { marginTop: 6 }]}
-              >
-                <Icon name="edit-2" size={16} color="#4f46e5" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
-
-      {/* Example Continue Button */}
-      <TouchableOpacity style={styles.continueButton} disabled>
-        <Icon name="check" size={20} color="#e0e0e0" />
-        <Text style={styles.continueButtonText}>Continue to Submit</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      {/* Bottom Navigation */}
+      <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   headerSafeArea: {
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 44, // Adjust for Android's status bar height
-    backgroundColor: '#4338ca', // match header background
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 44,
+    backgroundColor: '#4338ca',
   },
   page: {
+    flexGrow: 1,
+    backgroundColor: '#f9fafb',
+    paddingBottom: 90, // Ensure enough space for BottomNav
+  },
+  scrollView: {
     flex: 1,
-    backgroundColor: '#f9fafb', // background
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4338ca', // primary color
+    backgroundColor: '#4338ca',
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 12,
@@ -339,3 +359,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+

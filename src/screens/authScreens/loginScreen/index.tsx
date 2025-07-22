@@ -11,7 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
-import logoImage from '../../../assets/images/greenbidz-logo.png';
+import logoImage from '../../../assets/images/greenbidzlogo.jpg';
 const { width, height } = Dimensions.get('window');
 
 const LoginScreen = () => {

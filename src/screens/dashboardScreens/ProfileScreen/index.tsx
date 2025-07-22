@@ -7,11 +7,16 @@ import {
   ScrollView,
   SafeAreaView,
   StyleSheet,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import BottomNav from '../../../components/BottomNavbar';
+import { useAppContext } from '../../../_customContext/AppProvider';
 
-export default function ProfileScreen({navigation}) {
+export default function ProfileScreen({ navigation }) {
+  const { showOverlay, setShowOverlay } = useAppContext();
+
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: 'John Smith',
@@ -23,18 +28,26 @@ export default function ProfileScreen({navigation}) {
   });
 
   const onChange = (key, value) => setForm({ ...form, [key]: value });
-  const onCancel = () => { setEditing(false); /* maybe reset form */ };
-  const onSave = () => { setEditing(false); /* submit changes */ };
+  const onCancel = () => {
+    setEditing(false); /* maybe reset form */
+  };
+  const onSave = () => {
+    setEditing(false); /* submit changes */
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 100 }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: 100 }]}
+      >
         {/* Header */}
         <View style={styles.header}>
           <View>
             <Text style={styles.headerTitle}>Profile</Text>
             <Text style={styles.headerSubtitle}>
-              {editing ? 'Edit your account info' : 'Manage your account information'}
+              {editing
+                ? 'Edit your account info'
+                : 'Manage your account information'}
             </Text>
           </View>
           {editing ? (
@@ -48,7 +61,10 @@ export default function ProfileScreen({navigation}) {
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() => setEditing(true)}
+            >
               <Icon name="edit-2" size={16} color="#fff" />
               <Text style={styles.editBtnText}>Edit</Text>
             </TouchableOpacity>
@@ -61,9 +77,11 @@ export default function ProfileScreen({navigation}) {
             <View style={styles.avatarCircle}>
               <Text style={styles.avatarInitials}>JS</Text>
             </View>
-            {editing && <TouchableOpacity style={styles.avatarBtn}>
-              <Icon name="camera" size={16} color="#fff" />
-            </TouchableOpacity> }
+            {editing && (
+              <TouchableOpacity style={styles.avatarBtn}>
+                <Icon name="camera" size={16} color="#fff" />
+              </TouchableOpacity>
+            )}
             <Text style={styles.name}>{form.name}</Text>
             <Text style={styles.username}>@{form.username}</Text>
           </View>
@@ -77,9 +95,29 @@ export default function ProfileScreen({navigation}) {
           </View>
           <View style={styles.cardContent}>
             {renderField('Full Name', 'name', form.name, editing, onChange)}
-            {renderField('Username', 'username', form.username, editing, onChange)}
-            {renderField('Email', 'email', form.email, editing, onChange, 'email-address')}
-            {renderField('Phone Number', 'phone', form.phone, editing, onChange, 'phone-pad')}
+            {renderField(
+              'Username',
+              'username',
+              form.username,
+              editing,
+              onChange,
+            )}
+            {renderField(
+              'Email',
+              'email',
+              form.email,
+              editing,
+              onChange,
+              'email-address',
+            )}
+            {renderField(
+              'Phone Number',
+              'phone',
+              form.phone,
+              editing,
+              onChange,
+              'phone-pad',
+            )}
           </View>
         </View>
 
@@ -91,7 +129,13 @@ export default function ProfileScreen({navigation}) {
           </View>
           <View style={styles.cardContent}>
             {renderField('Country', 'country', form.country, editing, onChange)}
-            {renderField('Company (Optional)', 'company', form.company, editing, onChange)}
+            {renderField(
+              'Company (Optional)',
+              'company',
+              form.company,
+              editing,
+              onChange,
+            )}
           </View>
         </View>
 
@@ -107,12 +151,19 @@ export default function ProfileScreen({navigation}) {
           </View>
         </View>
       </ScrollView>
-      <BottomNav navigation={navigation}/>
+      <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />
     </SafeAreaView>
   );
 }
 
-const renderField = (label, key, value, editing, onChange, keyboardType = 'default') => (
+const renderField = (
+  label,
+  key,
+  value,
+  editing,
+  onChange,
+  keyboardType = 'default',
+) => (
   <View style={styles.field}>
     <Text style={styles.label}>{label}</Text>
     {editing ? (
@@ -138,21 +189,62 @@ const renderStat = (num, label, color) => (
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f1f5f9' },
   content: { paddingBottom: 24 },
-  header: { backgroundColor: '#4f46e5', paddingHorizontal: 20, paddingVertical: 54, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  header: {
+    backgroundColor: '#4f46e5',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 44,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: { fontSize: 22, color: '#fff', fontWeight: 'bold' },
-  headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
-  editBtn: { flexDirection: 'row', backgroundColor: '#10b981', padding: 8, borderRadius: 6, alignItems: 'center' },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
+  },
+  editBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#10b981',
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
   editBtnText: { color: '#fff', marginLeft: 6 },
   editButtons: { flexDirection: 'row', gap: 8 },
-  cancelBtn: { backgroundColor: 'rgba(255,255,255,0.3)', padding: 8, borderRadius: 6 },
-  saveBtn: { flexDirection: 'row', backgroundColor: '#10b981', padding: 8, borderRadius: 6, alignItems: 'center' },
+  cancelBtn: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    padding: 8,
+    borderRadius: 6,
+  },
+  saveBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#10b981',
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
   cancelText: { color: '#fff', marginHorizontal: 4 },
   saveText: { color: '#fff', marginLeft: 4 },
   card: { backgroundColor: '#fff', margin: 16, borderRadius: 12, elevation: 2 },
   avatarContainer: { alignItems: 'center', padding: 24, position: 'relative' },
-  avatarCircle: { backgroundColor: '#4f46e5', width: 96, height: 96, borderRadius: 48, justifyContent: 'center', alignItems: 'center' },
+  avatarCircle: {
+    backgroundColor: '#4f46e5',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   avatarInitials: { color: '#fff', fontSize: 28, fontWeight: '600' },
-  avatarBtn: { position: 'absolute', bottom: 70, backgroundColor: '#4f46e5', padding: 8, borderRadius: 24 },
+  avatarBtn: {
+    position: 'absolute',
+    bottom: 70,
+    backgroundColor: '#4f46e5',
+    padding: 8,
+    borderRadius: 24,
+  },
   name: { fontSize: 20, fontWeight: '600', marginTop: 12, color: '#111827' },
   username: { fontSize: 14, color: '#6b7280' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', padding: 16 },
@@ -160,9 +252,26 @@ const styles = StyleSheet.create({
   cardContent: { padding: 16, paddingTop: 0 },
   field: { marginBottom: 12 },
   label: { fontSize: 13, marginBottom: 4, color: '#374151' },
-  value: { paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#f3f4f6', borderRadius: 6, color: '#111827' },
-  input: { paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 6, backgroundColor: '#fff' },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 16 },
+  value: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 6,
+    color: '#111827',
+  },
+  input: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 6,
+    backgroundColor: '#fff',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 16,
+  },
   statItem: { alignItems: 'center' },
   statNumber: { fontSize: 22, fontWeight: 'bold' },
   statLabel: { fontSize: 12, color: '#6b7280', marginTop: 4 },

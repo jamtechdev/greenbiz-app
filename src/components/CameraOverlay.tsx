@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,9 @@ const CameraOverlay = ({
   imageUri, // if present, show preview
 }) => {
   const isPreview = !!imageUri;
-
+  useEffect(()=>{
+    !isPreview && !imageUri && onCameraPick()
+  },[isPreview, imageUri])
   return (
     <Modal transparent visible={visible} animationType="fade">
       <View style={styles.overlay}>

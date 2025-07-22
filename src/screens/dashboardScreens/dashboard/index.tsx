@@ -13,16 +13,12 @@ import BottomNav from '../../../components/BottomNavbar';
 import ImagePicker from 'react-native-image-crop-picker';
 import CameraOverlay from '../../../components/CameraOverlay';
 import DetailsScreen from '../DetailsScreen';
-
+import { useAppContext } from '../../../_customContext/AppProvider';
 export default function DashboardScreen({ navigation }) {
-  const [showOverlay, setShowOverlay] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
+  const { showOverlay, setShowOverlay, selectedImage, setSelectedImage } =
+    useAppContext();
+  // const [selectedImage, setSelectedImage] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
-  useEffect(() => {
-    // Automatically show modal when dashboard loads
-    setTimeout(() => setShowOverlay(true), 300);
-  }, []);
-
   const handleGalleryPick = () => {
     ImagePicker.openPicker({
       width: 300,
@@ -42,10 +38,15 @@ export default function DashboardScreen({ navigation }) {
       // cropping: true,
     }).then(image => {
       console.log('Camera image:', image);
-      setSelectedImage(image.path);
+      setSelectedImage(image?.path);
       // setShowOverlay(false);
     });
   };
+  //  useEffect(() => {
+  //   // Automatically show modal when dashboard loads
+  //   setTimeout(() => setShowOverlay(true), 300);
+  // }, []);
+  // console.log(selectedImage);
   useEffect(() => {
     setSelectedImage(null);
   }, [showOverlay]);
@@ -63,7 +64,11 @@ export default function DashboardScreen({ navigation }) {
 
         {/* Cards */}
         <View style={styles.cardsContainer}>
-          <TouchableOpacity style={styles.scanCard} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.scanCard}
+            activeOpacity={0.85}
+            onPress={() => setShowOverlay(true)}
+          >
             <View style={styles.cardContent}>
               <View style={styles.iconCircle}>
                 <Icon name="camera" size={24} color="#ffffff" />
@@ -122,14 +127,14 @@ export default function DashboardScreen({ navigation }) {
             setShowOverlay(false);
             setSelectedImage(null);
           }}
-          onCameraPick={handleCameraPick}
-          onGalleryPick={handleGalleryPick}
+          onCameraPick={()=>handleCameraPick()}
+          onGalleryPick={()=>handleGalleryPick()}
           onRetake={() => {
             setSelectedImage(null);
           }}
           onNext={() => {
             setShowOverlay(false);
-            setShowDetails(true)
+            setShowDetails(true);
             navigation.navigate('Details', { image: selectedImage });
           }}
         />

@@ -8,7 +8,7 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "clean":"cd ../ android && cd ../gredlew/clean"
+    "clean": "cd ../ android && cd ../gredlew/clean"
   },
   "dependencies": {
     "@react-native/new-app-screen": "0.80.1",
@@ -16,7 +16,7 @@
     "@react-navigation/stack": "^7.4.2",
     "react": "19.1.0",
     "react-native": "0.80.1",
-    "react-native-gesture-handler": "^2.27.1",
+    "react-native-gesture-handler": "^2.27.2",
     "react-native-image-crop-picker": "^0.50.1",
     "react-native-image-picker": "^8.2.1",
     "react-native-modal": "^14.0.0-rc.1",
