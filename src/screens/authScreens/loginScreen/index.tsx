@@ -84,7 +84,7 @@ const LoginScreen = ({ navigation }) => {
       console.log('🔐 Attempting login with:', { email });
 
       // Make API call to JWT endpoint
-      const response = await fetch('https://staging.greenbidz.com/wp-json/jwt-auth/v1/token', {
+      const response = await fetch('https://greenbidz.com/wp-json/jwt-auth/v1/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
