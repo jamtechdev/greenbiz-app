@@ -118,7 +118,7 @@ export default function DashboardScreen({ navigation }) {
       console.log('🔄 Trying JSON method...');
       try {
         const jsonResponse = await fetch(
-          'https://staging.greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
+          'https://greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
           {
             method: 'POST',
             headers: {
@@ -164,7 +164,7 @@ export default function DashboardScreen({ navigation }) {
         });
 
         const fileResponse = await fetch(
-          'https://staging.greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
+          'https://greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
           {
             method: 'POST',
             headers: {
@@ -203,7 +203,7 @@ export default function DashboardScreen({ navigation }) {
         });
 
         const b64Response = await fetch(
-          'https://staging.greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
+          'https://greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
           {
             method: 'POST',
             headers: {

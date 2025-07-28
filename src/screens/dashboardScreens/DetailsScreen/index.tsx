@@ -17,47 +17,76 @@ import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppContext } from '../../../_customContext/AppProvider';
 import BottomNav from '../../../components/BottomNavbar';
+import DetailModal from '../../../components/ReviewModal';
 
 const { width } = Dimensions.get('window');
 
 export default function DetailsScreen({ route, navigation }) {
-  const { image, images, imageCount, analysisData, timestamp } = route.params || {};
+  const { image, images, imageCount, analysisData, timestamp } =
+    route.params || {};
   const { setShowOverlay } = useAppContext();
-  
+
   const selectedImages = images || (image ? [image] : []);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userToken, setUserToken] = useState(null);
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   // Initialize fields with API response data
   const getInitialFields = () => {
     console.log('🔄 Initializing fields with analysis data:', analysisData);
-    
+
     if (analysisData && analysisData.success && analysisData.data) {
       const data = analysisData.data;
       const priceData = data.price || {};
-      
+
       console.log('✅ Using fresh API data for fields');
+      console.log(analysisData);
       return {
         name: { value: data.name || 'Machine Name', editing: false },
         brand: { value: data.brand || 'Brand Name', editing: false },
         model: { value: data.model || 'Model', editing: false },
         year: { value: data.year?.toString() || '2023', editing: false },
-        equipment_description: { value: data.equipment_description || 'Equipment description', editing: false },
-        item_location: { value: data.item_location || 'Location', editing: false },
-        auction_group: { value: data.auction_group || 'General', editing: false },
-        parent_category: { value: data.parent_category || 'Category', editing: false },
+        equipment_description: {
+          value: data.equipment_description || 'Equipment description',
+          editing: false,
+        },
+        // item_location: { value: data.item_location || 'Location', editing: false },
+        // auction_group: { value: data.auction_group || 'General', editing: false },
+        parent_category: {
+          value: data.parent_category || 'Category',
+          editing: false,
+        },
         condition: { value: data.condition || 'Good', editing: false },
-        operation_status: { value: data.operation_status || 'Functional', editing: false },
+        operation_status: {
+          value: data.operation_status || 'Functional',
+          editing: false,
+        },
         currency: { value: data.currency || 'USD', editing: false },
-        original_price: { value: priceData.original_price?.toString() || '0', editing: false },
-        reselling_price: { value: priceData.reselling_price?.toString() || '0', editing: false },
-        min_reselling_price: { value: priceData.min_reselling_price_value?.toString() || '0', editing: false },
-        max_reselling_price: { value: priceData.max_reselling_price_value?.toString() || '0', editing: false },
+        original_price: {
+          value: priceData.original_price?.toString() || '0',
+          editing: false,
+        },
+        reselling_price: {
+          value: priceData.reselling_price?.toString() || '0',
+          editing: false,
+        },
+        min_reselling_price: {
+          value: priceData.min_reselling_price_value?.toString() || '0',
+          editing: false,
+        },
+        max_reselling_price: {
+          value: priceData.max_reselling_price_value?.toString() || '0',
+          editing: false,
+        },
+        reselling_price_value: {
+          value: priceData.reselling_price_value || {},
+          editing: false,
+        },
       };
     }
-    
+
     // Default values if no API data
     console.log('⚠️ No analysis data, using defaults');
     return {
@@ -65,9 +94,12 @@ export default function DetailsScreen({ route, navigation }) {
       brand: { value: 'Generic', editing: false },
       model: { value: 'Standard Desktop', editing: false },
       year: { value: '2023', editing: false },
-      equipment_description: { value: 'Includes monitor, keyboard, mouse, and CPU tower.', editing: false },
-      item_location: { value: 'Warehouse A', editing: false },
-      auction_group: { value: 'Electronics', editing: false },
+      equipment_description: {
+        value: 'Includes monitor, keyboard, mouse, and CPU tower.',
+        editing: false,
+      },
+      // item_location: { value: 'Warehouse A', editing: false },
+      // auction_group: { value: 'Electronics', editing: false },
       parent_category: { value: 'Computers', editing: false },
       condition: { value: 'New', editing: false },
       operation_status: { value: 'Functional', editing: false },
@@ -91,11 +123,11 @@ export default function DetailsScreen({ route, navigation }) {
     // Check if we have new analysis data
     if (timestamp && timestamp !== lastUpdateTimestamp) {
       console.log('🆕 New analysis data detected, updating fields...');
-      
+
       const newFields = getInitialFields();
       setFields(newFields);
       setLastUpdateTimestamp(timestamp);
-      
+
       console.log('✅ Fields updated with new analysis data');
     }
   }, [analysisData, timestamp]);
@@ -109,7 +141,7 @@ export default function DetailsScreen({ route, navigation }) {
     try {
       const token = await AsyncStorage.getItem('userToken');
       const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
-      
+
       if (token && isLoggedIn === 'true') {
         setUserToken(token);
       }
@@ -118,30 +150,30 @@ export default function DetailsScreen({ route, navigation }) {
     }
   };
 
-  const onEditPress = (key) => {
-    setFields((prev) => ({
+  const onEditPress = key => {
+    setFields(prev => ({
       ...prev,
       [key]: { ...prev[key], editing: true },
     }));
   };
 
-  const onBlur = (key) => {
-    setFields((prev) => ({
+  const onBlur = key => {
+    setFields(prev => ({
       ...prev,
       [key]: { ...prev[key], editing: false },
     }));
   };
 
   const onChangeText = (key, text) => {
-    setFields((prev) => ({
+    setFields(prev => ({
       ...prev,
       [key]: { ...prev[key], value: text },
     }));
   };
-    const handleContinueToSubmit = async () => {
+  const handleContinueToSubmit = async () => {
     const currentToken = await AsyncStorage.getItem('userToken');
     const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
-    
+
     if (currentToken && isLoggedIn === 'true') {
       handleSubmitListing(currentToken);
     } else {
@@ -149,7 +181,7 @@ export default function DetailsScreen({ route, navigation }) {
     }
   };
 
-  const handleSubmitListing = async (authToken) => {
+  const handleSubmitListing = async authToken => {
     try {
       setIsSubmitting(true);
 
@@ -163,8 +195,8 @@ export default function DetailsScreen({ route, navigation }) {
         model: fields.model.value,
         year: parseInt(fields.year.value),
         equipment_description: fields.equipment_description.value,
-        item_location: fields.item_location.value,
-        auction_group: fields.auction_group.value,
+        // item_location: fields.item_location.value,
+        // auction_group: fields.auction_group.value,
         parent_category: fields.parent_category.value,
         condition: fields.condition.value,
         operation_status: fields.operation_status.value,
@@ -177,18 +209,22 @@ export default function DetailsScreen({ route, navigation }) {
         analysisId: analysisData?.id,
         userId: parsedUserData?.id,
         timestamp: timestamp, // Include timestamp for tracking
+        reselling_price_value: fields?.reselling_price_value?.value,
       };
 
       console.log('📤 Submitting listing with current data:', submissionData);
 
-      const response = await fetch('https://staging.greenbidz.com/wp-json/greenbidz-api/v1/submit-listing', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
+      const response = await fetch(
+        'https://staging.greenbidz.com/wp-json/greenbidz-api/v1/submit-listing',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(submissionData),
         },
-        body: JSON.stringify(submissionData),
-      });
+      );
 
       const result = await response.json();
 
@@ -197,12 +233,11 @@ export default function DetailsScreen({ route, navigation }) {
         Alert.alert(
           'Success!',
           'Your machine listing has been submitted successfully.',
-          [{ text: 'OK', onPress: () => navigation.navigate('Dashboard') }]
+          [{ text: 'OK', onPress: () => navigation.navigate('Dashboard') }],
         );
       } else {
         throw new Error(result.message || 'Submission failed');
       }
-
     } catch (error) {
       console.error('Submission error:', error);
       setIsSubmitting(false);
@@ -215,7 +250,9 @@ export default function DetailsScreen({ route, navigation }) {
       return (
         <View style={[styles.image, styles.imagePlaceholder]}>
           <Icon name="camera" size={32} color="#999" />
-          <Text style={{ color: '#999', marginTop: 8 }}>No Images Selected</Text>
+          <Text style={{ color: '#999', marginTop: 8 }}>
+            No Images Selected
+          </Text>
         </View>
       );
     }
@@ -227,8 +264,11 @@ export default function DetailsScreen({ route, navigation }) {
     return (
       <View style={styles.imageGalleryContainer}>
         <View style={styles.mainImageContainer}>
-          <Image source={{ uri: selectedImages[currentImageIndex] }} style={styles.image} />
-          
+          <Image
+            source={{ uri: selectedImages[currentImageIndex] }}
+            style={styles.image}
+          />
+
           <View style={styles.imageCounter}>
             <Text style={styles.imageCounterText}>
               {currentImageIndex + 1} / {selectedImages.length}
@@ -243,7 +283,7 @@ export default function DetailsScreen({ route, navigation }) {
               <Icon name="chevron-left" size={20} color="#fff" />
             </TouchableOpacity>
           )}
-          
+
           {currentImageIndex < selectedImages.length - 1 && (
             <TouchableOpacity
               style={[styles.navArrow, styles.nextArrow]}
@@ -254,8 +294,8 @@ export default function DetailsScreen({ route, navigation }) {
           )}
         </View>
 
-        <ScrollView 
-          horizontal 
+        <ScrollView
+          horizontal
           style={styles.thumbnailStrip}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.thumbnailContent}
@@ -265,7 +305,7 @@ export default function DetailsScreen({ route, navigation }) {
               key={index}
               style={[
                 styles.thumbnailItem,
-                currentImageIndex === index && styles.activeThumbnail
+                currentImageIndex === index && styles.activeThumbnail,
               ]}
               onPress={() => setCurrentImageIndex(index)}
             >
@@ -283,24 +323,28 @@ export default function DetailsScreen({ route, navigation }) {
   const renderFieldInput = (key, label, props = {}) => (
     <View style={styles.fieldGroup}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.inputRow, props.multiline && { alignItems: 'flex-start' }]}>
+      <View
+        style={[
+          styles.inputRow,
+          props.multiline && { alignItems: 'flex-start' },
+        ]}
+      >
         {fields[key]?.editing ? (
           <TextInput
             style={[
               styles.input,
-              props.multiline && { height: 80, textAlignVertical: 'top' }
+              props.multiline && { height: 80, textAlignVertical: 'top' },
             ]}
             value={fields[key]?.value || ''}
-            onChangeText={(text) => onChangeText(key, text)}
+            onChangeText={text => onChangeText(key, text)}
             onBlur={() => onBlur(key)}
             autoFocus
             {...props}
           />
         ) : (
-          <Text style={[
-            styles.valueText,
-            props.multiline && { minHeight: 80 }
-          ]}>
+          <Text
+            style={[styles.valueText, props.multiline && { minHeight: 80 }]}
+          >
             {fields[key]?.value || `Enter ${label.toLowerCase()}`}
           </Text>
         )}
@@ -321,13 +365,14 @@ export default function DetailsScreen({ route, navigation }) {
       <ScrollView
         contentContainerStyle={styles.page}
         style={styles.scrollView}
-        keyboardShouldPersistTaps="handled">
-        
+        keyboardShouldPersistTaps="handled"
+      >
         <SafeAreaView style={styles.headerSafeArea}>
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => navigation.navigate('Dashboard')}>
+              onPress={() => navigation.navigate('Dashboard')}
+            >
               <Icon name="arrow-left" size={20} color="#f0f0f0" />
             </TouchableOpacity>
             <View style={styles.headerCenter}>
@@ -341,7 +386,10 @@ export default function DetailsScreen({ route, navigation }) {
                 <View style={styles.analysisStatus}>
                   <Icon name="check-circle" size={12} color="#34d399" />
                   <Text style={styles.analysisStatusText}>
-                    Fresh Analysis {timestamp ? `(${new Date(timestamp).toLocaleTimeString()})` : ''}
+                    Fresh Analysis{' '}
+                    {timestamp
+                      ? `(${new Date(timestamp).toLocaleTimeString()})`
+                      : ''}
                   </Text>
                 </View>
               )}
@@ -366,7 +414,9 @@ export default function DetailsScreen({ route, navigation }) {
             {selectedImages.length > 0 && (
               <View style={styles.imageCount}>
                 <Icon name="camera" size={16} color="#4f46e5" />
-                <Text style={styles.imageCountText}>{selectedImages.length}</Text>
+                <Text style={styles.imageCountText}>
+                  {selectedImages.length}
+                </Text>
               </View>
             )}
           </View>
@@ -376,9 +426,9 @@ export default function DetailsScreen({ route, navigation }) {
         {/* Basic Details Card */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Basic Information</Text>
-          
+
           {renderFieldInput('name', 'Name')}
-          
+
           <View style={styles.row}>
             <View style={[styles.fieldGroup, styles.halfWidth]}>
               <Text style={styles.label}>Brand</Text>
@@ -387,7 +437,7 @@ export default function DetailsScreen({ route, navigation }) {
                   <TextInput
                     style={styles.input}
                     value={fields.brand?.value || ''}
-                    onChangeText={(text) => onChangeText('brand', text)}
+                    onChangeText={text => onChangeText('brand', text)}
                     onBlur={() => onBlur('brand')}
                     autoFocus
                   />
@@ -395,7 +445,10 @@ export default function DetailsScreen({ route, navigation }) {
                   <Text style={styles.valueText}>{fields.brand?.value}</Text>
                 )}
                 {!fields.brand?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('brand')} style={styles.editBtn}>
+                  <TouchableOpacity
+                    onPress={() => onEditPress('brand')}
+                    style={styles.editBtn}
+                  >
                     <Icon name="edit-2" size={16} color="#4f46e5" />
                   </TouchableOpacity>
                 )}
@@ -409,7 +462,7 @@ export default function DetailsScreen({ route, navigation }) {
                   <TextInput
                     style={styles.input}
                     value={fields.model?.value || ''}
-                    onChangeText={(text) => onChangeText('model', text)}
+                    onChangeText={text => onChangeText('model', text)}
                     onBlur={() => onBlur('model')}
                     autoFocus
                   />
@@ -417,7 +470,10 @@ export default function DetailsScreen({ route, navigation }) {
                   <Text style={styles.valueText}>{fields.model?.value}</Text>
                 )}
                 {!fields.model?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('model')} style={styles.editBtn}>
+                  <TouchableOpacity
+                    onPress={() => onEditPress('model')}
+                    style={styles.editBtn}
+                  >
                     <Icon name="edit-2" size={16} color="#4f46e5" />
                   </TouchableOpacity>
                 )}
@@ -426,15 +482,17 @@ export default function DetailsScreen({ route, navigation }) {
           </View>
 
           {renderFieldInput('year', 'Year', { keyboardType: 'numeric' })}
-          {renderFieldInput('equipment_description', 'Description', { multiline: true })}
+          {renderFieldInput('equipment_description', 'Description', {
+            multiline: true,
+          })}
         </View>
 
         {/* Location & Category Card */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Location & Category</Text>
-          
-          {renderFieldInput('item_location', 'Location')}
-          
+
+          {/* {renderFieldInput('item_location', 'Location')} */}
+
           <View style={styles.row}>
             <View style={[styles.fieldGroup, styles.halfWidth]}>
               <Text style={styles.label}>Category</Text>
@@ -443,22 +501,27 @@ export default function DetailsScreen({ route, navigation }) {
                   <TextInput
                     style={styles.input}
                     value={fields.parent_category?.value || ''}
-                    onChangeText={(text) => onChangeText('parent_category', text)}
+                    onChangeText={text => onChangeText('parent_category', text)}
                     onBlur={() => onBlur('parent_category')}
                     autoFocus
                   />
                 ) : (
-                  <Text style={styles.valueText}>{fields.parent_category?.value}</Text>
+                  <Text style={styles.valueText}>
+                    {fields.parent_category?.value}
+                  </Text>
                 )}
                 {!fields.parent_category?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('parent_category')} style={styles.editBtn}>
+                  <TouchableOpacity
+                    onPress={() => onEditPress('parent_category')}
+                    style={styles.editBtn}
+                  >
                     <Icon name="edit-2" size={16} color="#4f46e5" />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
 
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
+            {/* <View style={[styles.fieldGroup, styles.halfWidth]}>
               <Text style={styles.label}>Auction Group</Text>
               <View style={styles.inputRow}>
                 {fields.auction_group?.editing ? (
@@ -478,14 +541,14 @@ export default function DetailsScreen({ route, navigation }) {
                   </TouchableOpacity>
                 )}
               </View>
-            </View>
+            </View> */}
           </View>
         </View>
 
         {/* Condition & Status Card */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Condition & Status</Text>
-          
+
           <View style={styles.row}>
             <View style={[styles.fieldGroup, styles.halfWidth]}>
               <Text style={styles.label}>Condition</Text>
@@ -494,15 +557,20 @@ export default function DetailsScreen({ route, navigation }) {
                   <TextInput
                     style={styles.input}
                     value={fields.condition?.value || ''}
-                    onChangeText={(text) => onChangeText('condition', text)}
+                    onChangeText={text => onChangeText('condition', text)}
                     onBlur={() => onBlur('condition')}
                     autoFocus
                   />
                 ) : (
-                  <Text style={styles.valueText}>{fields.condition?.value}</Text>
+                  <Text style={styles.valueText}>
+                    {fields.condition?.value}
+                  </Text>
                 )}
                 {!fields.condition?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('condition')} style={styles.editBtn}>
+                  <TouchableOpacity
+                    onPress={() => onEditPress('condition')}
+                    style={styles.editBtn}
+                  >
                     <Icon name="edit-2" size={16} color="#4f46e5" />
                   </TouchableOpacity>
                 )}
@@ -516,15 +584,22 @@ export default function DetailsScreen({ route, navigation }) {
                   <TextInput
                     style={styles.input}
                     value={fields.operation_status?.value || ''}
-                    onChangeText={(text) => onChangeText('operation_status', text)}
+                    onChangeText={text =>
+                      onChangeText('operation_status', text)
+                    }
                     onBlur={() => onBlur('operation_status')}
                     autoFocus
                   />
                 ) : (
-                  <Text style={styles.valueText}>{fields.operation_status?.value}</Text>
+                  <Text style={styles.valueText}>
+                    {fields.operation_status?.value}
+                  </Text>
                 )}
                 {!fields.operation_status?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('operation_status')} style={styles.editBtn}>
+                  <TouchableOpacity
+                    onPress={() => onEditPress('operation_status')}
+                    style={styles.editBtn}
+                  >
                     <Icon name="edit-2" size={16} color="#4f46e5" />
                   </TouchableOpacity>
                 )}
@@ -541,7 +616,7 @@ export default function DetailsScreen({ route, navigation }) {
               <Icon name="dollar-sign" size={16} color="#059669" />
             </View>
           </View>
-          
+
           <View style={styles.row}>
             <View style={[styles.fieldGroup, styles.halfWidth]}>
               <Text style={styles.label}>Currency</Text>
@@ -550,7 +625,7 @@ export default function DetailsScreen({ route, navigation }) {
                   <TextInput
                     style={styles.input}
                     value={fields.currency?.value || ''}
-                    onChangeText={(text) => onChangeText('currency', text)}
+                    onChangeText={text => onChangeText('currency', text)}
                     onBlur={() => onBlur('currency')}
                     autoFocus
                   />
@@ -558,7 +633,10 @@ export default function DetailsScreen({ route, navigation }) {
                   <Text style={styles.valueText}>{fields.currency?.value}</Text>
                 )}
                 {!fields.currency?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('currency')} style={styles.editBtn}>
+                  <TouchableOpacity
+                    onPress={() => onEditPress('currency')}
+                    style={styles.editBtn}
+                  >
                     <Icon name="edit-2" size={16} color="#4f46e5" />
                   </TouchableOpacity>
                 )}
@@ -572,7 +650,7 @@ export default function DetailsScreen({ route, navigation }) {
                   <TextInput
                     style={styles.input}
                     value={fields.original_price?.value || ''}
-                    onChangeText={(text) => onChangeText('original_price', text)}
+                    onChangeText={text => onChangeText('original_price', text)}
                     onBlur={() => onBlur('original_price')}
                     autoFocus
                     keyboardType="numeric"
@@ -583,7 +661,10 @@ export default function DetailsScreen({ route, navigation }) {
                   </Text>
                 )}
                 {!fields.original_price?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('original_price')} style={styles.editBtn}>
+                  <TouchableOpacity
+                    onPress={() => onEditPress('original_price')}
+                    style={styles.editBtn}
+                  >
                     <Icon name="edit-2" size={16} color="#4f46e5" />
                   </TouchableOpacity>
                 )}
@@ -599,7 +680,7 @@ export default function DetailsScreen({ route, navigation }) {
                   <TextInput
                     style={styles.input}
                     value={fields.reselling_price?.value || ''}
-                    onChangeText={(text) => onChangeText('reselling_price', text)}
+                    onChangeText={text => onChangeText('reselling_price', text)}
                     onBlur={() => onBlur('reselling_price')}
                     autoFocus
                     keyboardType="numeric"
@@ -610,7 +691,10 @@ export default function DetailsScreen({ route, navigation }) {
                   </Text>
                 )}
                 {!fields.reselling_price?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('reselling_price')} style={styles.editBtn}>
+                  <TouchableOpacity
+                    onPress={() => onEditPress('reselling_price')}
+                    style={styles.editBtn}
+                  >
                     <Icon name="edit-2" size={16} color="#4f46e5" />
                   </TouchableOpacity>
                 )}
@@ -624,7 +708,9 @@ export default function DetailsScreen({ route, navigation }) {
                   <TextInput
                     style={styles.input}
                     value={fields.min_reselling_price?.value || ''}
-                    onChangeText={(text) => onChangeText('min_reselling_price', text)}
+                    onChangeText={text =>
+                      onChangeText('min_reselling_price', text)
+                    }
                     onBlur={() => onBlur('min_reselling_price')}
                     autoFocus
                     keyboardType="numeric"
@@ -635,7 +721,10 @@ export default function DetailsScreen({ route, navigation }) {
                   </Text>
                 )}
                 {!fields.min_reselling_price?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('min_reselling_price')} style={styles.editBtn}>
+                  <TouchableOpacity
+                    onPress={() => onEditPress('min_reselling_price')}
+                    style={styles.editBtn}
+                  >
                     <Icon name="edit-2" size={16} color="#4f46e5" />
                   </TouchableOpacity>
                 )}
@@ -650,7 +739,9 @@ export default function DetailsScreen({ route, navigation }) {
                 <TextInput
                   style={styles.input}
                   value={fields.max_reselling_price?.value || ''}
-                  onChangeText={(text) => onChangeText('max_reselling_price', text)}
+                  onChangeText={text =>
+                    onChangeText('max_reselling_price', text)
+                  }
                   onBlur={() => onBlur('max_reselling_price')}
                   autoFocus
                   keyboardType="numeric"
@@ -661,7 +752,10 @@ export default function DetailsScreen({ route, navigation }) {
                 </Text>
               )}
               {!fields.max_reselling_price?.editing && (
-                <TouchableOpacity onPress={() => onEditPress('max_reselling_price')} style={styles.editBtn}>
+                <TouchableOpacity
+                  onPress={() => onEditPress('max_reselling_price')}
+                  style={styles.editBtn}
+                >
                   <Icon name="edit-2" size={16} color="#4f46e5" />
                 </TouchableOpacity>
               )}
@@ -669,27 +763,33 @@ export default function DetailsScreen({ route, navigation }) {
           </View>
 
           {/* Price Summary */}
-          <View style={styles.priceSummary}>
-            <Text style={styles.priceSummaryTitle}>Price Summary</Text>
-            <View style={styles.priceSummaryRow}>
-              <Text style={styles.priceSummaryLabel}>Original:</Text>
-              <Text style={styles.priceSummaryValue}>
-                {fields.currency?.value} {fields.original_price?.value}
-              </Text>
-            </View>
-            <View style={styles.priceSummaryRow}>
-              <Text style={styles.priceSummaryLabel}>Reselling:</Text>
-              <Text style={styles.priceSummaryValue}>
-                {fields.currency?.value} {fields.reselling_price?.value}
-              </Text>
-            </View>
-            <View style={styles.priceSummaryRow}>
-              <Text style={styles.priceSummaryLabel}>Range:</Text>
-              <Text style={styles.priceSummaryValue}>
-                {fields.currency?.value} {fields.min_reselling_price?.value} - {fields.currency?.value} {fields.max_reselling_price?.value}
-              </Text>
-            </View>
-          </View>
+
+          {fields.reselling_price_value?.value &&
+            Object.keys(fields.reselling_price_value.value).length > 0 && (
+              <View style={styles.priceSummary}>
+                <Text style={styles.priceSummaryTitle}>
+                  Market Source Breakdown
+                </Text>
+                <View style={styles.priceSummaryRow}>
+                  <Text
+                    style={[styles.priceSummaryLabel, { fontWeight: 'bold' }]}
+                  >
+                    Platform
+                  </Text>
+                  <Text style={styles.priceSummaryValue}>Avg. Price</Text>
+                </View>
+                {Object.entries(fields.reselling_price_value.value).map(
+                  ([platform, price]) => (
+                    <View key={platform} style={styles.priceSummaryRow}>
+                      <Text style={styles.priceSummaryLabel}>{platform}:</Text>
+                      <Text style={styles.priceSummaryValue}>
+                        {fields.currency?.value} {price}
+                      </Text>
+                    </View>
+                  ),
+                )}
+              </View>
+            )}
         </View>
 
         {/* Auth Status Card */}
@@ -700,16 +800,19 @@ export default function DetailsScreen({ route, navigation }) {
               <Text style={styles.authCardTitle}>Login Required</Text>
             </View>
             <Text style={styles.authCardText}>
-              You need to be logged in to submit your machine listing. 
-              Your current analysis data will be preserved!
+              You need to be logged in to submit your machine listing. Your
+              current analysis data will be preserved!
             </Text>
           </View>
         )}
 
         {/* Continue Button */}
         <TouchableOpacity
-          style={[styles.continueButton, isSubmitting && styles.continueButtonDisabled]}
-          onPress={handleContinueToSubmit}
+          style={[
+            styles.continueButton,
+            isSubmitting && styles.continueButtonDisabled,
+          ]}
+          onPress={() => setShowReviewModal(true)}
           disabled={isSubmitting}
         >
           {isSubmitting ? (
@@ -719,7 +822,11 @@ export default function DetailsScreen({ route, navigation }) {
             </>
           ) : (
             <>
-              <Icon name={userToken ? "check" : "log-in"} size={20} color="#e0e0e0" />
+              <Icon
+                name={userToken ? 'check' : 'log-in'}
+                size={20}
+                color="#e0e0e0"
+              />
               <Text style={styles.continueButtonText}>
                 {userToken ? 'Submit Listing' : 'Login & Submit'}
               </Text>
@@ -729,6 +836,13 @@ export default function DetailsScreen({ route, navigation }) {
       </ScrollView>
 
       <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />
+      <DetailModal
+        fields={fields}
+        showReviewModal={showReviewModal}
+        setShowReviewModal={setShowReviewModal}
+        onChangeText={onChangeText}
+        handleContinueToSubmit={handleContinueToSubmit}
+      />
     </View>
   );
 }
@@ -865,7 +979,7 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
   },
-  
+
   // Auth Card
   authCard: {
     backgroundColor: '#fef3c7',
@@ -892,7 +1006,7 @@ const styles = StyleSheet.create({
     color: '#78350f',
     lineHeight: 20,
   },
-  
+
   // Image Gallery Styles
   imageGalleryContainer: {
     gap: 12,
@@ -925,7 +1039,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  
+
   // Navigation Arrows
   navArrow: {
     position: 'absolute',
@@ -941,7 +1055,7 @@ const styles = StyleSheet.create({
   nextArrow: {
     right: 12,
   },
-  
+
   // Thumbnail Strip
   thumbnailStrip: {
     maxHeight: 70,
@@ -977,7 +1091,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4f46e5',
     borderRadius: 3,
   },
-  
+
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
@@ -1034,20 +1148,20 @@ const styles = StyleSheet.create({
   halfWidth: {
     flex: 1,
   },
-  
+
   // Price Summary
   priceSummary: {
-    backgroundColor: '#f0fdf4',
+    // backgroundColor: '#f0fdf4',
     borderRadius: 8,
     padding: 12,
     marginTop: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#059669',
+    // borderLeftWidth: 4,
+    // borderLeftColor: '#059669',
   },
   priceSummaryTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#065f46',
+    color: '#6b7280',
     marginBottom: 8,
   },
   priceSummaryRow: {
@@ -1065,7 +1179,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#065f46',
   },
-  
+
   continueButton: {
     flexDirection: 'row',
     alignItems: 'center',
