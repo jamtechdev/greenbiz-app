@@ -10,14 +10,18 @@ import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import LoginScreen from './src/screens/authScreens/loginScreen';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AppProvider } from './src/_customContext/AppProvider';
+import { Provider } from 'react-redux';
+import { store } from './src/store';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
-    <AppProvider>
-      <AppNavigator />
-    </AppProvider>
+    <Provider store={store}>
+      <AppProvider>
+        <AppNavigator />
+      </AppProvider>
+    </Provider>
   );
 }
 
