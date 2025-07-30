@@ -12,6 +12,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { AppProvider } from './src/_customContext/AppProvider';
 import { Provider } from 'react-redux';
 import { store } from './src/store';
+import GlobalAlertProvider from './src/providers/GlobalAlertProvider';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -19,7 +20,9 @@ function App() {
   return (
     <Provider store={store}>
       <AppProvider>
-        <AppNavigator />
+        <GlobalAlertProvider>
+          <AppNavigator />
+        </GlobalAlertProvider>
       </AppProvider>
     </Provider>
   );

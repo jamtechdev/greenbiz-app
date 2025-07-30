@@ -10,7 +10,8 @@ import {
   Platform,
   StatusBar,
   Dimensions,
-  Alert,
+  Animated,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -18,13 +19,69 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppContext } from '../../../_customContext/AppProvider';
 import BottomNav from '../../../components/BottomNavbar';
 import DetailModal from '../../../components/ReviewModal';
+import CustomAlert from '../../../components/CustomAlert';
 
-const { width } = Dimensions.get('window');
+import { apiService } from '../../../api/axiosConfig';
+import { useCustomAlert } from '../../../hook/useCustomAlert';
+
+const { width, height } = Dimensions.get('window');
+
+// Clean, modern color palette
+const COLORS = {
+  primary: '#2563eb', // Clean blue
+  primaryLight: '#3b82f6',
+  secondary: '#10b981', // Clean green
+  accent: '#8b5cf6', // Purple accent
+  background: '#f8fafc',
+  cardBackground: '#ffffff',
+  textPrimary: '#1e293b',
+  textSecondary: '#64748b',
+  textMuted: '#94a3b8',
+  success: '#10b981',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  border: '#e2e8f0',
+  light: '#f1f5f9',
+};
+
+// Dropdown options
+const CONDITIONS = [
+  'New/Unused',
+  'Like New',
+  'Used',
+  'Used, Needs Minor Repair',
+];
+
+const OPERATION_STATUS = ['Running', 'Idle', 'Down'];
+
+const CURRENCIES = [
+  'USD ($)',
+  'CNY (¥)',
+  'TWD (NT$)',
+  'THB (฿)',
+  'VND (₫)',
+  'HKD (HK$)',
+  'EUR (€)',
+  'CAD (C$)',
+  'GBP (£)',
+  'AUD (A$)',
+  'PKR (Rs)',
+  'AED (د.إ)',
+];
 
 export default function DetailsScreen({ route, navigation }) {
   const { image, images, imageCount, analysisData, timestamp } =
     route.params || {};
   const { setShowOverlay } = useAppContext();
+
+  const {
+    alertConfig,
+    hideAlert,
+    showLoginRequired,
+    showSuccess,
+    showError,
+    showConfirm,
+  } = useCustomAlert();
 
   const selectedImages = images || (image ? [image] : []);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -32,17 +89,22 @@ export default function DetailsScreen({ route, navigation }) {
   const [userToken, setUserToken] = useState(null);
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [mediaFiles, setMediaFiles] = useState([]); // Add media files state
+
+  // Dropdown states
+  const [dropdownVisible, setDropdownVisible] = useState({
+    condition: false,
+    operation_status: false,
+    currency: false,
+  });
 
   // Initialize fields with API response data
   const getInitialFields = () => {
-    console.log('🔄 Initializing fields with analysis data:', analysisData);
-
     if (analysisData && analysisData.success && analysisData.data) {
       const data = analysisData.data;
       const priceData = data.price || {};
 
-      console.log('✅ Using fresh API data for fields');
-      console.log(analysisData);
       return {
         name: { value: data.name || 'Machine Name', editing: false },
         brand: { value: data.brand || 'Brand Name', editing: false },
@@ -52,15 +114,13 @@ export default function DetailsScreen({ route, navigation }) {
           value: data.equipment_description || 'Equipment description',
           editing: false,
         },
-        // item_location: { value: data.item_location || 'Location', editing: false },
-        // auction_group: { value: data.auction_group || 'General', editing: false },
         parent_category: {
           value: data.parent_category || 'Category',
           editing: false,
         },
-        condition: { value: data.condition || 'Good', editing: false },
+        condition: { value: data.condition || 'New/Unused', editing: false },
         operation_status: {
-          value: data.operation_status || 'Functional',
+          value: data.operation_status || 'Running',
           editing: false,
         },
         currency: { value: data.currency || 'USD', editing: false },
@@ -71,24 +131,36 @@ export default function DetailsScreen({ route, navigation }) {
         reselling_price: {
           value: priceData.reselling_price?.toString() || '0',
           editing: false,
+          readOnly: true,
         },
         min_reselling_price: {
           value: priceData.min_reselling_price_value?.toString() || '0',
           editing: false,
+          readOnly: true,
         },
         max_reselling_price: {
           value: priceData.max_reselling_price_value?.toString() || '0',
           editing: false,
+          readOnly: true,
         },
         reselling_price_value: {
           value: priceData.reselling_price_value || {},
           editing: false,
         },
+        product_type: { value: 'Marketplace', editing: false },
+        auction_start_date: { value: '', editing: false },
+        auction_end_date: { value: '', editing: false },
+        auction_start_price: { value: '0', editing: false },
+        auction_group: { value: '', editing: false },
+        auction_currency: { value: 'USD ($)', editing: false },
+        reserve_price: { value: '', editing: false },
+        item_location: { value: '', editing: false },
+        sub_category: { value: '', editing: false },
+        dimensions: { value: '', editing: false },
+        co2_emission: { value: '', editing: false },
       };
     }
 
-    // Default values if no API data
-    console.log('⚠️ No analysis data, using defaults');
     return {
       name: { value: 'Desktop Computer Set', editing: false },
       brand: { value: 'Generic', editing: false },
@@ -98,44 +170,53 @@ export default function DetailsScreen({ route, navigation }) {
         value: 'Includes monitor, keyboard, mouse, and CPU tower.',
         editing: false,
       },
-      // item_location: { value: 'Warehouse A', editing: false },
-      // auction_group: { value: 'Electronics', editing: false },
-      parent_category: { value: 'Computers', editing: false },
-      condition: { value: 'New', editing: false },
-      operation_status: { value: 'Functional', editing: false },
+      condition: { value: 'New/Unused', editing: false },
+      operation_status: { value: 'Running', editing: false },
       currency: { value: 'USD', editing: false },
       original_price: { value: '600', editing: false },
-      reselling_price: { value: '450', editing: false },
-      min_reselling_price: { value: '450', editing: false },
-      max_reselling_price: { value: '550', editing: false },
+      reselling_price: { value: '450', editing: false, readOnly: true },
+      min_reselling_price: { value: '450', editing: false, readOnly: true },
+      max_reselling_price: { value: '550', editing: false, readOnly: true },
+      reselling_price_value: { value: {}, editing: false },
+      product_type: { value: 'Marketplace', editing: false },
+      auction_start_date: { value: '', editing: false },
+      auction_end_date: { value: '', editing: false },
+      auction_start_price: { value: '0', editing: false },
+      auction_group: { value: '', editing: false },
+      auction_currency: { value: 'USD ($)', editing: false },
+      reserve_price: { value: '', editing: false },
+      item_location: { value: '', editing: false },
+      sub_category: { value: '', editing: false },
+      dimensions: { value: '', editing: false },
+      co2_emission: { value: '', editing: false },
     };
   };
 
   const [fields, setFields] = useState(getInitialFields());
 
-  // Update fields when new analysis data arrives
   useEffect(() => {
-    console.log('🔄 DetailsScreen useEffect - checking for new data');
-    console.log('Current timestamp:', timestamp);
-    console.log('Last update timestamp:', lastUpdateTimestamp);
-    console.log('Analysis data exists:', !!analysisData);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
-    // Check if we have new analysis data
+  useEffect(() => {
     if (timestamp && timestamp !== lastUpdateTimestamp) {
-      console.log('🆕 New analysis data detected, updating fields...');
-
       const newFields = getInitialFields();
       setFields(newFields);
       setLastUpdateTimestamp(timestamp);
-
-      console.log('✅ Fields updated with new analysis data');
     }
   }, [analysisData, timestamp]);
 
-  // Check auth status on mount
   useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      checkAuthStatus();
+    });
     checkAuthStatus();
-  }, []);
+    return unsubscribe;
+  }, [navigation]);
 
   const checkAuthStatus = async () => {
     try {
@@ -144,6 +225,18 @@ export default function DetailsScreen({ route, navigation }) {
 
       if (token && isLoggedIn === 'true') {
         setUserToken(token);
+
+        const shouldShowModal = await AsyncStorage.getItem(
+          'shouldShowReviewModal',
+        );
+        if (shouldShowModal === 'true') {
+          await AsyncStorage.removeItem('shouldShowReviewModal');
+          setTimeout(() => {
+            setShowReviewModal(true);
+          }, 500);
+        }
+      } else {
+        setUserToken(null);
       }
     } catch (error) {
       console.error('Error checking auth:', error);
@@ -151,6 +244,10 @@ export default function DetailsScreen({ route, navigation }) {
   };
 
   const onEditPress = key => {
+    if (fields[key]?.readOnly) {
+      return;
+    }
+
     setFields(prev => ({
       ...prev,
       [key]: { ...prev[key], editing: true },
@@ -170,95 +267,261 @@ export default function DetailsScreen({ route, navigation }) {
       [key]: { ...prev[key], value: text },
     }));
   };
+
+  // Media files handler
+  const handleMediaFilesChange = files => {
+    setMediaFiles(files);
+  };
+
+  // Dropdown handlers
+  const toggleDropdown = fieldKey => {
+    setDropdownVisible(prev => ({
+      ...prev,
+      [fieldKey]: !prev[fieldKey],
+    }));
+  };
+
+  const selectDropdownOption = (fieldKey, value) => {
+    onChangeText(fieldKey, value);
+    setDropdownVisible(prev => ({
+      ...prev,
+      [fieldKey]: false,
+    }));
+  };
+
+  const closeAllDropdowns = () => {
+    setDropdownVisible({
+      condition: false,
+      operation_status: false,
+      currency: false,
+    });
+  };
+
   const handleContinueToSubmit = async () => {
     const currentToken = await AsyncStorage.getItem('userToken');
     const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
 
     if (currentToken && isLoggedIn === 'true') {
-      handleSubmitListing(currentToken);
+      setShowReviewModal(true);
     } else {
-      navigation.navigate('Login');
-    }
-  };
+      await AsyncStorage.setItem('shouldShowReviewModal', 'true');
 
-  const handleSubmitListing = async authToken => {
-    try {
-      setIsSubmitting(true);
-
-      const userData = await AsyncStorage.getItem('userData');
-      const parsedUserData = userData ? JSON.parse(userData) : null;
-
-      // Prepare submission data with all fields
-      const submissionData = {
-        name: fields.name.value,
-        brand: fields.brand.value,
-        model: fields.model.value,
-        year: parseInt(fields.year.value),
-        equipment_description: fields.equipment_description.value,
-        // item_location: fields.item_location.value,
-        // auction_group: fields.auction_group.value,
-        parent_category: fields.parent_category.value,
-        condition: fields.condition.value,
-        operation_status: fields.operation_status.value,
-        currency: fields.currency.value,
-        original_price: parseFloat(fields.original_price.value),
-        reselling_price: parseFloat(fields.reselling_price.value),
-        min_reselling_price: parseFloat(fields.min_reselling_price.value),
-        max_reselling_price: parseFloat(fields.max_reselling_price.value),
-        images: selectedImages,
-        analysisId: analysisData?.id,
-        userId: parsedUserData?.id,
-        timestamp: timestamp, // Include timestamp for tracking
-        reselling_price_value: fields?.reselling_price_value?.value,
+      const navigationData = {
+        fromScreen: 'Details',
+        screenParams: {
+          image,
+          images,
+          imageCount,
+          analysisData,
+          timestamp,
+        },
       };
 
-      console.log('📤 Submitting listing with current data:', submissionData);
-
-      const response = await fetch(
-        'https://staging.greenbidz.com/wp-json/greenbidz-api/v1/submit-listing',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(submissionData),
+      showLoginRequired({
+        title: 'Login Required',
+        message:
+          "Please sign in to submit your equipment listing. You'll return to this screen after login.",
+        onSignIn: () => {
+          navigation.navigate('Login', navigationData);
         },
-      );
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setIsSubmitting(false);
-        Alert.alert(
-          'Success!',
-          'Your machine listing has been submitted successfully.',
-          [{ text: 'OK', onPress: () => navigation.navigate('Dashboard') }],
-        );
-      } else {
-        throw new Error(result.message || 'Submission failed');
-      }
-    } catch (error) {
-      console.error('Submission error:', error);
-      setIsSubmitting(false);
-      Alert.alert('Submission Failed', error.message);
+      });
     }
   };
+
+ const handleSubmitListing = async () => {
+  try {
+    // Ensure product_title is provided
+    if (!fields.name.value) {
+      Alert.alert('Validation Error', 'Product title is required');
+      setIsSubmitting(false);
+      return; // Stop further execution
+    }
+
+    console.log('🚀 Starting product submission...');
+    setIsSubmitting(true);
+
+    // Process media files first
+    const documents = mediaFiles.filter(
+      (file) =>
+        file.category === 'documents' && file.type === 'application/pdf',
+    );
+
+    const videos = mediaFiles.filter(
+      (file) => file.category === 'videos' && file.type === 'video/mp4',
+    );
+
+    console.log(selectedImages, 'selectedImagesselectedImagesselectedImages');
+
+    // Create FormData object
+    const formData = new FormData();
+
+    // Add text fields to FormData
+    formData.append('product_title', fields.name.value || '');
+    formData.append('description', fields.equipment_description?.value || '');
+    formData.append('brand', fields.brand?.value || '');
+    formData.append('model', fields.model?.value || '');
+    formData.append('item_condition', fields.condition?.value || 'New/Unused');
+    formData.append('operation_status', fields.operation_status?.value || 'Running');
+    formData.append('manufacturing_year', fields.year?.value || new Date().getFullYear().toString());
+    formData.append('price', fields.original_price?.value || '0');
+    formData.append('product_type', (fields.product_type?.value || 'Marketplace').toLowerCase());
+    formData.append('currency', fields.currency?.value || 'USD');
+
+    // Handle images - append each image file to FormData
+    const imagePromises = selectedImages.map(async (imageUri, index) => {
+      if (typeof imageUri === 'string') {
+        // For React Native, create file object from URI
+        const fileExtension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+        const fileName = `image_${index}.${fileExtension}`;
+        const mimeType = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`;
+        
+        // For React Native file upload
+        formData.append('images[]', {
+          uri: imageUri,
+          type: mimeType,
+          name: fileName,
+        });
+      } else if (imageUri && imageUri.uri) {
+        formData.append('images[]', {
+          uri: imageUri.uri,
+          type: imageUri.type || 'image/jpeg',
+          name: imageUri.name || `image_${index}.jpg`,
+        });
+      }
+    });
+
+    // Wait for all image processing to complete
+    await Promise.all(imagePromises);
+
+    // Handle documents
+    documents.forEach((doc, index) => {
+      formData.append('documents', {
+        uri: doc.uri,
+        type: doc.type || 'application/pdf',
+        name: doc.name || `document_${index}.pdf`,
+      });
+    });
+
+    // Handle videos
+    videos.forEach((video, index) => {
+      formData.append('video', {
+        uri: video.uri,
+        type: video.type || 'video/mp4',
+        name: video.name || `video_${index}.mp4`,
+      });
+    });
+
+    // Add auction-specific fields if product type is auction
+    const productType = (fields.product_type?.value || 'Marketplace').toLowerCase();
+    if (productType === 'auction') {
+      formData.append('_yith_auction_for', fields.auction_start_date?.value || '');
+      formData.append('_yith_auction_to', fields.auction_end_date?.value || '');
+      formData.append('_yith_auction_start_price', fields.auction_start_price?.value || '0');
+      formData.append('auction_group', fields.auction_group?.value || '');
+      formData.append('reserve_price', fields.reserve_price?.value || '');
+      formData.append('auction_currency', fields.auction_currency?.value || 'USD ($)');
+    }
+
+    // Add optional fields
+    if (fields.item_location?.value) {
+      formData.append('item_location', fields.item_location.value);
+    }
+    if (fields.sub_category?.value) {
+      formData.append('sub_category', fields.sub_category.value);
+    }
+    if (fields.parent_category?.value) {
+      formData.append('parent_category', fields.parent_category.value);
+    }
+    if (fields.dimensions?.value) {
+      formData.append('dimensions', fields.dimensions.value);
+    }
+    if (fields.co2_emission?.value) {
+      formData.append('co2_emission', fields.co2_emission.value);
+    }
+
+    // Add pricing analysis data if available
+    if (
+      fields.reselling_price_value?.value &&
+      Object.keys(fields.reselling_price_value.value).length > 0
+    ) {
+      formData.append('market_analysis', JSON.stringify(fields.reselling_price_value.value));
+      formData.append('suggested_reselling_price', fields.reselling_price?.value || '0');
+      formData.append('min_reselling_price', fields.min_reselling_price?.value || '0');
+      formData.append('max_reselling_price', fields.max_reselling_price?.value || '0');
+    }
+
+    // Submit using FormData
+    const response = await apiService.saveProduct(formData);
+
+    console.log('✅ Submission successful:', response.data);
+    setIsSubmitting(false);
+
+    if (response.data) {
+      showSuccess({
+        title: 'Success!',
+        message: 'Your equipment listing has been submitted successfully.',
+        buttonText: 'Continue',
+        onPress: () => navigation.navigate('Dashboard'),
+      });
+    }
+  } catch (error) {
+    console.error('❌ Submission error:', error);
+    setIsSubmitting(false);
+
+    let errorMessage =
+      'An error occurred while submitting your listing. Please try again.';
+
+    // Handle specific error types
+    if (error.message === 'Network Error' || error.code === 'NETWORK_ERROR') {
+      errorMessage =
+        'Network connection failed. Please check your internet connection and try again.';
+    } else if (error.response?.status === 422) {
+      const validationErrors = error.response.data?.errors;
+      if (validationErrors) {
+        // Format validation errors
+        const errorMessages = Object.values(validationErrors).flat();
+        errorMessage =
+          errorMessages.length > 0
+            ? errorMessages.join('\n')
+            : 'Please check your input data and try again.';
+      }
+    } else if (error.response?.status === 413) {
+      errorMessage =
+        'Files are too large. Please reduce file sizes and try again.';
+    } else if (error.response?.status === 401) {
+      errorMessage = 'Authentication failed. Please log in again.';
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    showError({
+      title: 'Submission Failed',
+      message: errorMessage,
+    });
+  }
+};
 
   const renderImageGallery = () => {
     if (selectedImages.length === 0) {
       return (
-        <View style={[styles.image, styles.imagePlaceholder]}>
-          <Icon name="camera" size={32} color="#999" />
-          <Text style={{ color: '#999', marginTop: 8 }}>
-            No Images Selected
-          </Text>
+        <View style={styles.imagePlaceholder}>
+          <Icon name="camera" size={24} color={COLORS.textMuted} />
+          <Text style={styles.placeholderText}>No Images Selected</Text>
         </View>
       );
     }
 
     if (selectedImages.length === 1) {
-      return <Image source={{ uri: selectedImages[0] }} style={styles.image} />;
+      return (
+        <View style={styles.singleImageContainer}>
+          <Image
+            source={{ uri: selectedImages[0] }}
+            style={styles.singleImage}
+          />
+        </View>
+      );
     }
 
     return (
@@ -266,7 +529,7 @@ export default function DetailsScreen({ route, navigation }) {
         <View style={styles.mainImageContainer}>
           <Image
             source={{ uri: selectedImages[currentImageIndex] }}
-            style={styles.image}
+            style={styles.mainImage}
           />
 
           <View style={styles.imageCounter}>
@@ -311,7 +574,9 @@ export default function DetailsScreen({ route, navigation }) {
             >
               <Image source={{ uri: imageUri }} style={styles.thumbnailImage} />
               {currentImageIndex === index && (
-                <View style={styles.activeThumbnailIndicator} />
+                <View style={styles.activeThumbnailOverlay}>
+                  <Icon name="check" size={12} color="#fff" />
+                </View>
               )}
             </TouchableOpacity>
           ))}
@@ -320,40 +585,189 @@ export default function DetailsScreen({ route, navigation }) {
     );
   };
 
-  const renderFieldInput = (key, label, props = {}) => (
-    <View style={styles.fieldGroup}>
-      <Text style={styles.label}>{label}</Text>
-      <View
-        style={[
-          styles.inputRow,
-          props.multiline && { alignItems: 'flex-start' },
-        ]}
-      >
+  const renderFieldInput = (key, label, icon, props = {}) => (
+    <View style={styles.fieldContainer}>
+      <View style={styles.fieldHeader}>
+        <Icon name={icon} size={16} color={COLORS.primary} />
+        <Text style={styles.fieldLabel}>{label}</Text>
+      </View>
+
+      <View style={styles.fieldInputContainer}>
         {fields[key]?.editing ? (
           <TextInput
             style={[
-              styles.input,
-              props.multiline && { height: 80, textAlignVertical: 'top' },
+              styles.fieldInput,
+              styles.fieldInputEditing,
+              props.multiline && styles.fieldInputMultiline,
             ]}
             value={fields[key]?.value || ''}
             onChangeText={text => onChangeText(key, text)}
             onBlur={() => onBlur(key)}
             autoFocus
+            placeholder={`Enter ${label.toLowerCase()}`}
+            placeholderTextColor={COLORS.textMuted}
             {...props}
           />
         ) : (
-          <Text
-            style={[styles.valueText, props.multiline && { minHeight: 80 }]}
-          >
-            {fields[key]?.value || `Enter ${label.toLowerCase()}`}
-          </Text>
-        )}
-        {!fields[key]?.editing && (
           <TouchableOpacity
+            style={styles.fieldDisplay}
             onPress={() => onEditPress(key)}
-            style={[styles.editBtn, props.multiline && { marginTop: 6 }]}
           >
-            <Icon name="edit-2" size={16} color="#4f46e5" />
+            <Text
+              style={[
+                styles.fieldText,
+                props.multiline && styles.fieldTextMultiline,
+              ]}
+            >
+              {fields[key]?.value || `Enter ${label.toLowerCase()}`}
+            </Text>
+            <Icon name="edit-2" size={16} color={COLORS.textMuted} />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderDropdownField = (key, label, icon, options) => (
+    <View style={styles.fieldContainer}>
+      <View style={styles.fieldHeader}>
+        <Icon name={icon} size={16} color={COLORS.primary} />
+        <Text style={styles.fieldLabel}>{label}</Text>
+      </View>
+
+      <View style={styles.fieldInputContainer}>
+        <TouchableOpacity
+          style={styles.fieldDisplay}
+          onPress={() => toggleDropdown(key)}
+        >
+          <Text style={styles.fieldText}>
+            {fields[key]?.value || `Select ${label.toLowerCase()}`}
+          </Text>
+          <Icon
+            name={dropdownVisible[key] ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={COLORS.textMuted}
+          />
+        </TouchableOpacity>
+
+        <Modal
+          visible={dropdownVisible[key]}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => closeAllDropdowns()}
+        >
+          <TouchableOpacity
+            style={styles.dropdownOverlay}
+            activeOpacity={1}
+            onPress={() => closeAllDropdowns()}
+          >
+            <View style={styles.dropdownModal}>
+              <View style={styles.dropdownHeader}>
+                <Text style={styles.dropdownTitle}>Select {label}</Text>
+                <TouchableOpacity
+                  onPress={() => closeAllDropdowns()}
+                  style={styles.dropdownCloseButton}
+                >
+                  <Icon name="x" size={20} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.dropdownContent}>
+                {options.map((option, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.dropdownOption,
+                      fields[key]?.value === option &&
+                        styles.dropdownOptionSelected,
+                    ]}
+                    onPress={() => selectDropdownOption(key, option)}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownOptionText,
+                        fields[key]?.value === option &&
+                          styles.dropdownOptionTextSelected,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                    {fields[key]?.value === option && (
+                      <Icon name="check" size={16} color={COLORS.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </View>
+    </View>
+  );
+
+  const renderPriceField = (key, label, icon, readOnly = false) => (
+    <View style={styles.fieldContainer}>
+      <View style={styles.fieldHeader}>
+        <Icon
+          name={icon}
+          size={16}
+          color={readOnly ? COLORS.textMuted : COLORS.success}
+        />
+        <Text
+          style={[
+            styles.fieldLabel,
+            { color: readOnly ? COLORS.textMuted : COLORS.textPrimary },
+          ]}
+        >
+          {label}
+        </Text>
+        {readOnly && (
+          <View style={styles.readOnlyBadge}>
+            <Text style={styles.readOnlyText}>Read Only</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.priceFieldContainer}>
+        {fields[key]?.editing && !readOnly ? (
+          <View style={styles.priceInputWrapper}>
+            <Text style={styles.currencyPrefix}>{fields.currency?.value}</Text>
+            <TextInput
+              style={styles.priceInput}
+              value={fields[key]?.value || ''}
+              onChangeText={text => {
+                const numericText = text.replace(/[^0-9.]/g, '');
+                onChangeText(key, numericText);
+              }}
+              keyboardType="decimal-pad"
+              onBlur={() => onBlur(key)}
+              placeholder="0.00"
+              placeholderTextColor={COLORS.textMuted}
+              autoFocus
+            />
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.priceDisplay,
+              readOnly && styles.priceDisplayReadOnly,
+            ]}
+            onPress={() => !readOnly && onEditPress(key)}
+          >
+            <Text
+              style={[
+                styles.priceText,
+                { color: readOnly ? COLORS.textMuted : COLORS.success },
+              ]}
+            >
+              {fields.currency?.value}{' '}
+              {parseFloat(fields[key]?.value || 0).toLocaleString()}
+            </Text>
+            {!readOnly && (
+              <Icon name="edit-2" size={16} color={COLORS.textMuted} />
+            )}
+            {readOnly && (
+              <Icon name="lock" size={16} color={COLORS.textMuted} />
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -362,486 +776,239 @@ export default function DetailsScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.page}
-        style={styles.scrollView}
-        keyboardShouldPersistTaps="handled"
-      >
-        <SafeAreaView style={styles.headerSafeArea}>
-          <View style={styles.header}>
+      <StatusBar barStyle="dark-content" backgroundColor={'#c0faf5'} />
+
+      {/* Clean Header */}
+      <View style={styles.header}>
+        <SafeAreaView>
+          <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => navigation.navigate('Dashboard')}
             >
-              <Icon name="arrow-left" size={20} color="#f0f0f0" />
+              <Icon name="arrow-left" size={24} color="#0d9488" />
             </TouchableOpacity>
-            <View style={styles.headerCenter}>
-              <Text style={styles.headerTitle}>AI Analysis Results</Text>
+
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>Equipment Details</Text>
               {selectedImages.length > 1 && (
                 <Text style={styles.headerSubtitle}>
                   {selectedImages.length} images analyzed
                 </Text>
               )}
-              {analysisData && analysisData.success && (
-                <View style={styles.analysisStatus}>
-                  <Icon name="check-circle" size={12} color="#34d399" />
-                  <Text style={styles.analysisStatusText}>
-                    Fresh Analysis{' '}
-                    {timestamp
-                      ? `(${new Date(timestamp).toLocaleTimeString()})`
-                      : ''}
-                  </Text>
-                </View>
-              )}
             </View>
-            <View style={styles.headerRight}>
-              {userToken ? (
-                <View style={styles.authStatus}>
-                  <Icon name="user-check" size={16} color="#34d399" />
-                </View>
-              ) : (
-                <View style={styles.authStatus}>
-                  <Icon name="user-x" size={16} color="#f59e0b" />
-                </View>
-              )}
+
+            <View style={styles.authStatus}>
+              <View
+                style={[
+                  styles.authIndicator,
+                  userToken
+                    ? styles.authIndicatorLoggedIn
+                    : styles.authIndicatorLoggedOut,
+                ]}
+              >
+                <Icon
+                  name={userToken ? 'user-check' : 'user-x'}
+                  size={16}
+                  color="#fff"
+                />
+              </View>
             </View>
           </View>
         </SafeAreaView>
-        {/* Image Gallery Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.sectionTitle}>Machine Images</Text>
-            {selectedImages.length > 0 && (
-              <View style={styles.imageCount}>
-                <Icon name="camera" size={16} color="#4f46e5" />
-                <Text style={styles.imageCountText}>
-                  {selectedImages.length}
-                </Text>
-              </View>
-            )}
-          </View>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Images Section */}
+        <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+          <Text style={styles.sectionTitle}>Equipment Images</Text>
           {renderImageGallery()}
-        </View>
+        </Animated.View>
 
-        {/* Basic Details Card */}
-        <View style={styles.card}>
+        {/* Basic Information */}
+        <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
           <Text style={styles.sectionTitle}>Basic Information</Text>
+          <View style={styles.card}>
+            {renderFieldInput('name', 'Equipment Name', 'tag')}
 
-          {renderFieldInput('name', 'Name')}
-
-          <View style={styles.row}>
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Brand</Text>
-              <View style={styles.inputRow}>
-                {fields.brand?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.brand?.value || ''}
-                    onChangeText={text => onChangeText('brand', text)}
-                    onBlur={() => onBlur('brand')}
-                    autoFocus
-                  />
-                ) : (
-                  <Text style={styles.valueText}>{fields.brand?.value}</Text>
-                )}
-                {!fields.brand?.editing && (
-                  <TouchableOpacity
-                    onPress={() => onEditPress('brand')}
-                    style={styles.editBtn}
-                  >
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
+            <View style={styles.fieldRow}>
+              <View style={styles.fieldHalf}>
+                {renderFieldInput('brand', 'Brand', 'bookmark')}
+              </View>
+              <View style={styles.fieldHalf}>
+                {renderFieldInput('model', 'Model', 'cpu')}
               </View>
             </View>
 
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Model</Text>
-              <View style={styles.inputRow}>
-                {fields.model?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.model?.value || ''}
-                    onChangeText={text => onChangeText('model', text)}
-                    onBlur={() => onBlur('model')}
-                    autoFocus
-                  />
-                ) : (
-                  <Text style={styles.valueText}>{fields.model?.value}</Text>
-                )}
-                {!fields.model?.editing && (
-                  <TouchableOpacity
-                    onPress={() => onEditPress('model')}
-                    style={styles.editBtn}
-                  >
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </View>
+            {renderFieldInput('year', 'Year', 'calendar', {
+              keyboardType: 'numeric',
+            })}
 
-          {renderFieldInput('year', 'Year', { keyboardType: 'numeric' })}
-          {renderFieldInput('equipment_description', 'Description', {
-            multiline: true,
-          })}
-        </View>
-
-        {/* Location & Category Card */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Location & Category</Text>
-
-          {/* {renderFieldInput('item_location', 'Location')} */}
-
-          <View style={styles.row}>
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Category</Text>
-              <View style={styles.inputRow}>
-                {fields.parent_category?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.parent_category?.value || ''}
-                    onChangeText={text => onChangeText('parent_category', text)}
-                    onBlur={() => onBlur('parent_category')}
-                    autoFocus
-                  />
-                ) : (
-                  <Text style={styles.valueText}>
-                    {fields.parent_category?.value}
-                  </Text>
-                )}
-                {!fields.parent_category?.editing && (
-                  <TouchableOpacity
-                    onPress={() => onEditPress('parent_category')}
-                    style={styles.editBtn}
-                  >
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            {/* <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Auction Group</Text>
-              <View style={styles.inputRow}>
-                {fields.auction_group?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.auction_group?.value || ''}
-                    onChangeText={(text) => onChangeText('auction_group', text)}
-                    onBlur={() => onBlur('auction_group')}
-                    autoFocus
-                  />
-                ) : (
-                  <Text style={styles.valueText}>{fields.auction_group?.value}</Text>
-                )}
-                {!fields.auction_group?.editing && (
-                  <TouchableOpacity onPress={() => onEditPress('auction_group')} style={styles.editBtn}>
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View> */}
-          </View>
-        </View>
-
-        {/* Condition & Status Card */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Condition & Status</Text>
-
-          <View style={styles.row}>
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Condition</Text>
-              <View style={styles.inputRow}>
-                {fields.condition?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.condition?.value || ''}
-                    onChangeText={text => onChangeText('condition', text)}
-                    onBlur={() => onBlur('condition')}
-                    autoFocus
-                  />
-                ) : (
-                  <Text style={styles.valueText}>
-                    {fields.condition?.value}
-                  </Text>
-                )}
-                {!fields.condition?.editing && (
-                  <TouchableOpacity
-                    onPress={() => onEditPress('condition')}
-                    style={styles.editBtn}
-                  >
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Operation Status</Text>
-              <View style={styles.inputRow}>
-                {fields.operation_status?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.operation_status?.value || ''}
-                    onChangeText={text =>
-                      onChangeText('operation_status', text)
-                    }
-                    onBlur={() => onBlur('operation_status')}
-                    autoFocus
-                  />
-                ) : (
-                  <Text style={styles.valueText}>
-                    {fields.operation_status?.value}
-                  </Text>
-                )}
-                {!fields.operation_status?.editing && (
-                  <TouchableOpacity
-                    onPress={() => onEditPress('operation_status')}
-                    style={styles.editBtn}
-                  >
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Pricing Information Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.sectionTitle}>Pricing Information</Text>
-            <View style={styles.priceIcon}>
-              <Icon name="dollar-sign" size={16} color="#059669" />
-            </View>
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Currency</Text>
-              <View style={styles.inputRow}>
-                {fields.currency?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.currency?.value || ''}
-                    onChangeText={text => onChangeText('currency', text)}
-                    onBlur={() => onBlur('currency')}
-                    autoFocus
-                  />
-                ) : (
-                  <Text style={styles.valueText}>{fields.currency?.value}</Text>
-                )}
-                {!fields.currency?.editing && (
-                  <TouchableOpacity
-                    onPress={() => onEditPress('currency')}
-                    style={styles.editBtn}
-                  >
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Original Price</Text>
-              <View style={styles.inputRow}>
-                {fields.original_price?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.original_price?.value || ''}
-                    onChangeText={text => onChangeText('original_price', text)}
-                    onBlur={() => onBlur('original_price')}
-                    autoFocus
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={[styles.valueText, styles.priceText]}>
-                    {fields.currency?.value} {fields.original_price?.value}
-                  </Text>
-                )}
-                {!fields.original_price?.editing && (
-                  <TouchableOpacity
-                    onPress={() => onEditPress('original_price')}
-                    style={styles.editBtn}
-                  >
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Reselling Price</Text>
-              <View style={styles.inputRow}>
-                {fields.reselling_price?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.reselling_price?.value || ''}
-                    onChangeText={text => onChangeText('reselling_price', text)}
-                    onBlur={() => onBlur('reselling_price')}
-                    autoFocus
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={[styles.valueText, styles.priceText]}>
-                    {fields.currency?.value} {fields.reselling_price?.value}
-                  </Text>
-                )}
-                {!fields.reselling_price?.editing && (
-                  <TouchableOpacity
-                    onPress={() => onEditPress('reselling_price')}
-                    style={styles.editBtn}
-                  >
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            <View style={[styles.fieldGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Min Price</Text>
-              <View style={styles.inputRow}>
-                {fields.min_reselling_price?.editing ? (
-                  <TextInput
-                    style={styles.input}
-                    value={fields.min_reselling_price?.value || ''}
-                    onChangeText={text =>
-                      onChangeText('min_reselling_price', text)
-                    }
-                    onBlur={() => onBlur('min_reselling_price')}
-                    autoFocus
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={[styles.valueText, styles.priceText]}>
-                    {fields.currency?.value} {fields.min_reselling_price?.value}
-                  </Text>
-                )}
-                {!fields.min_reselling_price?.editing && (
-                  <TouchableOpacity
-                    onPress={() => onEditPress('min_reselling_price')}
-                    style={styles.editBtn}
-                  >
-                    <Icon name="edit-2" size={16} color="#4f46e5" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Max Reselling Price</Text>
-            <View style={styles.inputRow}>
-              {fields.max_reselling_price?.editing ? (
-                <TextInput
-                  style={styles.input}
-                  value={fields.max_reselling_price?.value || ''}
-                  onChangeText={text =>
-                    onChangeText('max_reselling_price', text)
-                  }
-                  onBlur={() => onBlur('max_reselling_price')}
-                  autoFocus
-                  keyboardType="numeric"
-                />
-              ) : (
-                <Text style={[styles.valueText, styles.priceText]}>
-                  {fields.currency?.value} {fields.max_reselling_price?.value}
-                </Text>
-              )}
-              {!fields.max_reselling_price?.editing && (
-                <TouchableOpacity
-                  onPress={() => onEditPress('max_reselling_price')}
-                  style={styles.editBtn}
-                >
-                  <Icon name="edit-2" size={16} color="#4f46e5" />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          {/* Price Summary */}
-
-          {fields.reselling_price_value?.value &&
-            Object.keys(fields.reselling_price_value.value).length > 0 && (
-              <View style={styles.priceSummary}>
-                <Text style={styles.priceSummaryTitle}>
-                  Market Source Breakdown
-                </Text>
-                <View style={styles.priceSummaryRow}>
-                  <Text
-                    style={[styles.priceSummaryLabel, { fontWeight: 'bold' }]}
-                  >
-                    Platform
-                  </Text>
-                  <Text style={styles.priceSummaryValue}>Avg. Price</Text>
-                </View>
-                {Object.entries(fields.reselling_price_value.value).map(
-                  ([platform, price]) => (
-                    <View key={platform} style={styles.priceSummaryRow}>
-                      <Text style={styles.priceSummaryLabel}>{platform}:</Text>
-                      <Text style={styles.priceSummaryValue}>
-                        {fields.currency?.value} {price}
-                      </Text>
-                    </View>
-                  ),
-                )}
-              </View>
+            {renderFieldInput(
+              'equipment_description',
+              'Description',
+              'file-text',
+              {
+                multiline: true,
+                numberOfLines: 3,
+              },
             )}
-        </View>
-
-        {/* Auth Status Card */}
-        {!userToken && (
-          <View style={styles.authCard}>
-            <View style={styles.authCardHeader}>
-              <Icon name="info" size={20} color="#f59e0b" />
-              <Text style={styles.authCardTitle}>Login Required</Text>
-            </View>
-            <Text style={styles.authCardText}>
-              You need to be logged in to submit your machine listing. Your
-              current analysis data will be preserved!
-            </Text>
           </View>
+        </Animated.View>
+
+        {/* Condition & Status */}
+        <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+          <Text style={styles.sectionTitle}>Condition & Status</Text>
+          <View style={styles.card}>
+            <View style={styles.fieldRow}>
+              <View style={styles.fieldHalf}>
+                {renderDropdownField(
+                  'condition',
+                  'Condition',
+                  'shield-check',
+                  CONDITIONS,
+                )}
+              </View>
+              <View style={styles.fieldHalf}>
+                {renderDropdownField(
+                  'operation_status',
+                  'Operation Status',
+                  'activity',
+                  OPERATION_STATUS,
+                )}
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Pricing Information */}
+        <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+          <Text style={styles.sectionTitle}>Pricing Information</Text>
+          <View style={styles.card}>
+            <View style={styles.fieldRow}>
+              <View style={styles.fieldHalf}>
+                {renderDropdownField(
+                  'currency',
+                  'Currency',
+                  'dollar-sign',
+                  CURRENCIES,
+                )}
+              </View>
+              <View style={styles.fieldHalf}>
+                {renderPriceField(
+                  'original_price',
+                  'Original Price',
+                  'tag',
+                  false,
+                )}
+              </View>
+            </View>
+
+            {/* Market Analysis */}
+            {fields.reselling_price_value?.value &&
+              Object.keys(fields.reselling_price_value.value).length > 0 && (
+                <View style={styles.marketAnalysis}>
+                  <View style={styles.marketHeader}>
+                    <Icon name="trending-up" size={16} color={COLORS.success} />
+                    <Text style={styles.marketTitle}>Market Analysis</Text>
+                  </View>
+
+                  {Object.entries(fields.reselling_price_value.value).map(
+                    ([platform, price]) => (
+                      <View key={platform} style={styles.marketRow}>
+                        <Text style={styles.marketPlatformText}>
+                          {platform}
+                        </Text>
+                        <Text style={styles.marketPrice}>
+                          {fields.currency?.value}{' '}
+                          {parseFloat(price).toLocaleString()}
+                        </Text>
+                      </View>
+                    ),
+                  )}
+                </View>
+              )}
+          </View>
+        </Animated.View>
+
+        {/* Auth Status */}
+        {!userToken && (
+          <Animated.View style={[styles.authCard, { opacity: fadeAnim }]}>
+            <View style={styles.authCardContent}>
+              <Icon name="lock" size={20} color={COLORS.warning} />
+              <View style={styles.authCardText}>
+                <Text style={styles.authCardTitle}>Sign In Required</Text>
+                <Text style={styles.authCardDescription}>
+                  Please sign in to submit your equipment listing
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
         )}
 
-        {/* Continue Button */}
-        <TouchableOpacity
-          style={[
-            styles.continueButton,
-            isSubmitting && styles.continueButtonDisabled,
-          ]}
-          onPress={() => setShowReviewModal(true)}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <>
-              <Icon name="loader" size={20} color="#e0e0e0" />
-              <Text style={styles.continueButtonText}>Submitting...</Text>
-            </>
-          ) : (
-            <>
-              <Icon
-                name={userToken ? 'check' : 'log-in'}
-                size={20}
-                color="#e0e0e0"
-              />
-              <Text style={styles.continueButtonText}>
-                {userToken ? 'Submit Listing' : 'Login & Submit'}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {/* Submit Button */}
+        <Animated.View style={[styles.submitContainer, { opacity: fadeAnim }]}>
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              isSubmitting && styles.submitButtonDisabled,
+            ]}
+            onPress={handleContinueToSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <Icon name="loader" size={20} color="#fff" />
+                <Text style={styles.submitText}>Submitting...</Text>
+              </>
+            ) : (
+              <>
+                <Icon
+                  name={userToken ? 'send' : 'log-in'}
+                  size={20}
+                  color="#fff"
+                />
+                <Text style={styles.submitText}>
+                  {userToken ? 'Submit Listing' : 'Sign In & Submit'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
+        <View style={styles.bottomSpacing} />
       </ScrollView>
 
       <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />
+
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        showCancel={alertConfig.showCancel}
+        cancelText={alertConfig.cancelText}
+        vibrate={alertConfig.vibrate}
+        onDismiss={hideAlert}
+      />
+
       <DetailModal
         fields={fields}
         showReviewModal={showReviewModal}
         setShowReviewModal={setShowReviewModal}
         onChangeText={onChangeText}
-        handleContinueToSubmit={handleContinueToSubmit}
+        handleContinueToSubmit={() => {
+          const token = userToken;
+          if (token) {
+            handleSubmitListing(token);
+          }
+        }}
+        mediaFiles={mediaFiles}
+        onMediaFilesChange={handleMediaFilesChange}
       />
     </View>
   );
@@ -850,180 +1017,128 @@ export default function DetailsScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.background,
   },
-  headerSafeArea: {
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 44,
-    backgroundColor: '#4338ca',
+
+  // Header
+  header: {
+    backgroundColor: '#c0faf5',
+    // paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
-  page: {
-    flexGrow: 1,
-    backgroundColor: '#f9fafb',
-    paddingBottom: 90,
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 16,
   },
+  backButton: {
+    padding: 8,
+  },
+  headerText: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#0d9488',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#0d9488',
+    marginTop: 2,
+  },
+  authStatus: {
+    alignItems: 'center',
+  },
+  authIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  authIndicatorLoggedIn: {
+    backgroundColor: COLORS.success,
+  },
+  authIndicatorLoggedOut: {
+    backgroundColor: COLORS.warning,
+  },
+
+  // Scroll View
   scrollView: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4338ca',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 12,
+  scrollContent: {
+    paddingBottom: 100,
   },
-  headerCenter: {
-    flex: 1,
+
+  // Sections
+  section: {
+    marginTop: 24,
+    paddingHorizontal: 20,
   },
-  headerRight: {
-    width: 40,
-    alignItems: 'center',
-  },
-  backButton: {
-    padding: 6,
-    borderRadius: 6,
-  },
-  headerTitle: {
-    color: '#f9fafb',
+  sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-  },
-  headerSubtitle: {
-    color: 'rgba(249, 250, 251, 0.7)',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  analysisStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 4,
-  },
-  analysisStatusText: {
-    color: '#34d399',
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  authStatus: {
-    padding: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-
-  // Analysis Info Card
-  analysisInfoCard: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#059669',
-  },
-  analysisInfoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 8,
-  },
-  analysisInfoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#065f46',
-    flex: 1,
-  },
-  analysisTimestamp: {
-    fontSize: 12,
-    color: '#047857',
-    fontWeight: '500',
-  },
-  analysisInfoText: {
-    fontSize: 14,
-    color: '#047857',
-    lineHeight: 20,
-  },
-
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginVertical: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-    padding: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    color: COLORS.textPrimary,
     marginBottom: 16,
   },
-  imageCount: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eef2ff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+
+  // Cards
+  card: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 12,
-    gap: 4,
-  },
-  imageCountText: {
-    fontSize: 12,
-    color: '#4f46e5',
-    fontWeight: '500',
-  },
-  priceIcon: {
-    backgroundColor: '#ecfdf5',
-    padding: 8,
-    borderRadius: 8,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
 
-  // Auth Card
-  authCard: {
-    backgroundColor: '#fef3c7',
+  // Image Gallery
+  imagePlaceholder: {
+    height: 200,
+    backgroundColor: COLORS.light,
     borderRadius: 12,
-    marginHorizontal: 16,
-    marginVertical: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
-  },
-  authCardHeader: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
     gap: 8,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
   },
-  authCardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#92400e',
-  },
-  authCardText: {
+  placeholderText: {
     fontSize: 14,
-    color: '#78350f',
-    lineHeight: 20,
+    color: COLORS.textMuted,
+    marginTop: 8,
   },
-
-  // Image Gallery Styles
+  singleImageContainer: {
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  singleImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
   imageGalleryContainer: {
     gap: 12,
   },
   mainImageContainer: {
     position: 'relative',
-  },
-  image: {
-    width: '100%',
     height: 200,
     borderRadius: 12,
-    resizeMode: 'cover',
+    overflow: 'hidden',
   },
-  imagePlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#e5e7eb',
+  mainImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   imageCounter: {
     position: 'absolute',
@@ -1032,22 +1147,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   imageCounterText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '500',
   },
-
-  // Navigation Arrows
   navArrow: {
     position: 'absolute',
     top: '50%',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 20,
-    padding: 8,
     marginTop: -20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   prevArrow: {
     left: 12,
@@ -1055,148 +1171,335 @@ const styles = StyleSheet.create({
   nextArrow: {
     right: 12,
   },
-
-  // Thumbnail Strip
   thumbnailStrip: {
     maxHeight: 70,
   },
   thumbnailContent: {
     paddingHorizontal: 4,
-    alignItems: 'center',
+    gap: 8,
   },
   thumbnailItem: {
     width: 60,
     height: 60,
-    marginHorizontal: 4,
     borderRadius: 8,
+    overflow: 'hidden',
     position: 'relative',
     borderWidth: 2,
     borderColor: 'transparent',
   },
   activeThumbnail: {
-    borderColor: '#4f46e5',
+    borderColor: COLORS.primary,
   },
   thumbnailImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 6,
+    resizeMode: 'cover',
   },
-  activeThumbnailIndicator: {
+  activeThumbnailOverlay: {
     position: 'absolute',
-    bottom: -8,
-    left: '50%',
-    marginLeft: -3,
-    width: 6,
-    height: 6,
-    backgroundColor: '#4f46e5',
-    borderRadius: 3,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(37, 99, 235, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 16,
-    color: '#111827',
+  // Fields
+  fieldContainer: {
+    marginBottom: 20,
   },
-  fieldGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6b7280',
-    marginBottom: 6,
-  },
-  inputRow: {
+  fieldHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  valueText: {
-    flex: 1,
-    backgroundColor: '#f3f4f6',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    fontSize: 15,
-    color: '#111827',
-  },
-  priceText: {
-    fontWeight: '600',
-    color: '#059669',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#eef2ff',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    fontSize: 15,
-    color: '#111827',
-    borderWidth: 1,
-    borderColor: '#4338ca',
-  },
-  editBtn: {
-    padding: 8,
-    borderRadius: 6,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 16,
-  },
-  halfWidth: {
-    flex: 1,
-  },
-
-  // Price Summary
-  priceSummary: {
-    // backgroundColor: '#f0fdf4',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 16,
-    // borderLeftWidth: 4,
-    // borderLeftColor: '#059669',
-  },
-  priceSummaryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6b7280',
     marginBottom: 8,
   },
-  priceSummaryRow: {
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  readOnlyBadge: {
+    backgroundColor: COLORS.light,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  readOnlyText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+  },
+  fieldInputContainer: {
+    position: 'relative',
+  },
+  fieldDisplay: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.light,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    minHeight: 48,
   },
-  priceSummaryLabel: {
+  fieldText: {
+    flex: 1,
     fontSize: 14,
-    color: '#047857',
+    color: COLORS.textPrimary,
+    fontWeight: '400',
   },
-  priceSummaryValue: {
+  fieldTextMultiline: {
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  fieldInput: {
+    backgroundColor: COLORS.cardBackground,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#065f46',
+    color: COLORS.textPrimary,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    fontWeight: '400',
+  },
+  fieldInputEditing: {
+    borderColor: COLORS.primary,
+  },
+  fieldInputMultiline: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  fieldHalf: {
+    flex: 1,
   },
 
-  continueButton: {
+  // Dropdown
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  dropdownModal: {
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 300,
+    maxHeight: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  dropdownTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  dropdownCloseButton: {
+    padding: 4,
+  },
+  dropdownContent: {
+    maxHeight: 300,
+  },
+  dropdownOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.light,
+  },
+  dropdownOptionSelected: {
+    backgroundColor: COLORS.light,
+  },
+  dropdownOptionText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontWeight: '400',
+  },
+  dropdownOptionTextSelected: {
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+
+  // Price Fields
+  priceFieldContainer: {
+    position: 'relative',
+  },
+  priceInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    overflow: 'hidden',
+  },
+  currencyPrefix: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: COLORS.light,
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  priceInput: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  priceDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.light,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  priceDisplayReadOnly: {
+    backgroundColor: COLORS.light,
+    borderColor: COLORS.border,
+  },
+  priceText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  // Market Analysis
+  marketAnalysis: {
+    marginTop: 16,
+    backgroundColor: COLORS.light,
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  marketHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  marketTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.success,
+  },
+  marketRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  marketPlatformText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    textTransform: 'capitalize',
+  },
+  marketPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.success,
+  },
+
+  // Auth Card
+  authCard: {
+    backgroundColor: COLORS.cardBackground,
+    marginHorizontal: 20,
+    marginTop: 24,
+    borderRadius: 12,
+    padding: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.warning,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  authCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  authCardText: {
+    flex: 1,
+  },
+  authCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  authCardDescription: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+
+  // Submit Button
+  submitContainer: {
+    marginHorizontal: 20,
+    marginTop: 32,
+  },
+  submitButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
     gap: 8,
-    backgroundColor: '#4338ca',
-    marginHorizontal: 16,
-    marginVertical: 24,
-    paddingVertical: 14,
-    borderRadius: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  continueButtonDisabled: {
-    backgroundColor: '#9ca3af',
+  submitButtonDisabled: {
+    backgroundColor: COLORS.textMuted,
+    shadowOpacity: 0,
+    elevation: 0,
   },
-  continueButtonText: {
-    color: '#f9fafb',
-    fontWeight: '600',
+  submitText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  bottomSpacing: {
+    height: 32,
   },
 });

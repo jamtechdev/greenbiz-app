@@ -9,31 +9,52 @@ import {
   SafeAreaView,
   ScrollView,
   Dimensions,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/FontAwesome';
-import logoImage from '../../../assets/images/greenbidzlogo.jpg';
-import { 
-  setPendingNavigation, 
+import logoImage from '../../../assets/images/greenbidzlogo.png';
+
+import { apiService } from '../../../api/axiosConfig';
+import {
+  setPendingNavigation,
   clearPendingNavigation,
-  clearAuthError 
+  clearAuthError,
 } from '../../../store/slices/authSlice';
+import { useCustomAlert } from '../../../hook/useCustomAlert';
+import CustomAlert from '../../../components/CustomAlert';
 
 const { width, height } = Dimensions.get('window');
 
-const LoginScreen = ({ navigation }) => {
+const LoginScreen = ({ navigation, route }) => {
   const dispatch = useDispatch();
+  const {
+    alertConfig,
+    hideAlert,
+    showLoginRequired,
+    showSuccess,
+    showError,
+    showConfirm,
+  } = useCustomAlert();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
   const [loginError, setLoginError] = useState('');
 
-  // Redux selectors for pending navigation
-  const { pendingNavigation } = useSelector((state) => state.auth);
+  // Get navigation params and Redux state
+  const { fromScreen, screenParams } = route.params || {};
+  const { pendingNavigation } = useSelector(state => state.auth);
+
+  // Debug route params
+  useEffect(() => {
+    console.log('🔍 LoginScreen received route params:', route.params);
+    console.log('🔍 fromScreen:', fromScreen);
+    console.log('🔍 screenParams:', screenParams);
+    console.log('🔍 pendingNavigation from Redux:', pendingNavigation);
+  }, [route.params, fromScreen, screenParams, pendingNavigation]);
 
   // Clear any existing errors when component mounts
   useEffect(() => {
@@ -42,7 +63,7 @@ const LoginScreen = ({ navigation }) => {
   }, [dispatch]);
 
   // Clear error when user starts typing
-  const handleEmailChange = (text) => {
+  const handleEmailChange = text => {
     setEmail(text);
     if (loginError) {
       setLoginError('');
@@ -50,7 +71,7 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  const handlePasswordChange = (text) => {
+  const handlePasswordChange = text => {
     setPassword(text);
     if (loginError) {
       setLoginError('');
@@ -83,33 +104,27 @@ const LoginScreen = ({ navigation }) => {
 
       console.log('🔐 Attempting login with:', { email });
 
-      // Make API call to JWT endpoint
-      const response = await fetch('https://greenbidz.com/wp-json/jwt-auth/v1/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: email, // WordPress typically uses username field
-          password: password,
-        }),
-      });
+      // Use apiService for login
+      const loginData = {
+        username: email, // WordPress typically uses username field
+        password: password,
+      };
 
-      const responseData = await response.json();
-      console.log('🔐 Login API Response:', response.status, responseData);
+      const response = await apiService.login(loginData);
+      console.log('🔐 Login API Response:', response.status, response.data);
 
-      if (response.ok && responseData.token) {
-        // Success - store in AsyncStorage (your existing system)
-        await AsyncStorage.setItem('userToken', responseData.token);
+      if (response.data && response.data.token) {
+        // Success - store in AsyncStorage
+        await AsyncStorage.setItem('userToken', response.data.token);
         await AsyncStorage.setItem('isLoggedIn', 'true');
-        
+
         // Store user data if provided
-        if (responseData.user_email || responseData.user_display_name) {
+        if (response.data.user_email || response.data.user_display_name) {
           const userData = {
-            id: responseData.user_id || null,
-            email: responseData.user_email || email,
-            displayName: responseData.user_display_name || '',
-            nicename: responseData.user_nicename || '',
+            id: response.data.user_id || null,
+            email: response.data.user_email || email,
+            displayName: response.data.user_display_name || '',
+            nicename: response.data.user_nicename || '',
           };
           await AsyncStorage.setItem('userData', JSON.stringify(userData));
         }
@@ -121,72 +136,125 @@ const LoginScreen = ({ navigation }) => {
         setPassword('');
         setIsLogging(false);
 
-        // Show success message
-        Alert.alert(
-          'Welcome!',
-          'You have been logged in successfully.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Navigate based on pending navigation or default to Dashboard
-                if (pendingNavigation) {
-                  console.log('📍 Navigating to pending screen:', pendingNavigation);
-                  dispatch(clearPendingNavigation());
-                  navigation.navigate(pendingNavigation);
-                } else {
-                  console.log('📍 Navigating to Dashboard');
-                  navigation.navigate('Dashboard');
-                }
-              },
-            },
-          ]
-        );
-
+        // Show success message and navigate
+        showSuccess({
+          title: 'Welcome!',
+          message: 'You have been logged in successfully.',
+          buttonText: 'Continue',
+          onPress: () => {
+            handleSuccessfulLogin();
+          },
+        });
       } else {
-        // Handle API errors
-        const errorMessage = responseData.message || 
-                           responseData.error || 
-                           'Login failed. Please check your credentials.';
-        
-        console.log('❌ Login failed:', errorMessage);
-        setLoginError(errorMessage);
-        setIsLogging(false);
+        throw new Error(response.data?.message || 'Login failed');
       }
-
     } catch (error) {
       console.error('🚨 Login error:', error);
-      setLoginError('Network error. Please check your connection and try again.');
       setIsLogging(false);
+
+      let errorMessage =
+        'Network error. Please check your connection and try again.';
+
+      if (error.response) {
+        const { status, data } = error.response;
+
+        if (status === 401 || status === 403) {
+          errorMessage = data?.message || 'Invalid email or password.';
+        } else if (status === 422) {
+          errorMessage =
+            data?.message || 'Please check your input and try again.';
+        } else if (status >= 500) {
+          errorMessage = 'Server error. Please try again later.';
+        } else {
+          errorMessage = data?.message || 'Login failed. Please try again.';
+        }
+      }
+
+      setLoginError(errorMessage);
+
+      showError({
+        title: 'Login Failed',
+        message: errorMessage,
+      });
     }
   };
 
+  const handleSuccessfulLogin = () => {
+    console.log('🎯 Handling successful login...');
+    console.log('📍 fromScreen:', fromScreen);
+    console.log('📍 screenParams:', screenParams);
+    console.log('📍 pendingNavigation:', pendingNavigation);
+
+    // Priority 1: Navigate back to the screen that brought us here (fromScreen param)
+    if (fromScreen) {
+      console.log('✅ Navigating back to fromScreen:', fromScreen);
+
+      try {
+        if (screenParams) {
+          console.log('📦 With params:', screenParams);
+          navigation.navigate(fromScreen, screenParams);
+        } else {
+          console.log('📦 Without params');
+          navigation.navigate(fromScreen);
+        }
+        return;
+      } catch (error) {
+        console.error('❌ Error navigating to fromScreen:', error);
+        // Fall through to other options
+      }
+    }
+
+    // Priority 2: Check for pending navigation from Redux
+    if (pendingNavigation) {
+      console.log('✅ Navigating to pending screen:', pendingNavigation);
+      try {
+        dispatch(clearPendingNavigation());
+        navigation.navigate(pendingNavigation);
+        return;
+      } catch (error) {
+        console.error('❌ Error navigating to pending screen:', error);
+        // Fall through to default
+      }
+    }
+
+    // Priority 3: Default to Dashboard
+    console.log('✅ Navigating to Dashboard (default)');
+    navigation.navigate('Dashboard');
+  };
+
   const handleGoogleSignIn = () => {
-    // Implement Google sign in
-    console.log('Google sign in - Coming soon');
-    Alert.alert('Coming Soon', 'Google Sign In will be available soon!');
+    showError({
+      title: 'Coming Soon',
+      message: 'Google Sign In will be available soon!',
+    });
   };
 
   const handleFacebookSignIn = () => {
-    // Implement Facebook sign in
-    console.log('Facebook sign in - Coming soon');
-    Alert.alert('Coming Soon', 'Facebook Sign In will be available soon!');
+    showError({
+      title: 'Coming Soon',
+      message: 'Facebook Sign In will be available soon!',
+    });
   };
 
   const handleAppleSignIn = () => {
-    // Implement Apple sign in
-    console.log('Apple sign in - Coming soon');
-    Alert.alert('Coming Soon', 'Apple Sign In will be available soon!');
+    showError({
+      title: 'Coming Soon',
+      message: 'Apple Sign In will be available soon!',
+    });
   };
 
   const handleSignUp = () => {
-    // Navigate to sign up screen
-    console.log('Navigate to sign up - Coming soon');
-    Alert.alert('Coming Soon', 'Sign Up will be available soon!');
+    showError({
+      title: 'Coming Soon',
+      message: 'Sign Up will be available soon!',
+    });
   };
 
   const handleForgotPassword = () => {
-    Alert.alert('Forgot Password', 'Password reset functionality will be available soon!');
+    showError({
+      title: 'Coming Soon',
+      message: 'Password reset functionality will be available soon!',
+    });
   };
 
   return (
@@ -207,10 +275,9 @@ const LoginScreen = ({ navigation }) => {
           </View>
           <Text style={styles.title}>Welcome to GreenBidz</Text>
           <Text style={styles.subtitle}>
-            {pendingNavigation 
+            {fromScreen || pendingNavigation
               ? 'Please sign in to continue with your listing'
-              : 'Your industrial equipment marketplace'
-            }
+              : 'Your industrial equipment marketplace'}
           </Text>
         </View>
 
@@ -219,9 +286,9 @@ const LoginScreen = ({ navigation }) => {
           {/* Sign In Form */}
           <View style={styles.formCard}>
             <Text style={styles.formTitle}>Sign In</Text>
-            
-            {/* Pending Navigation Info */}
-            {pendingNavigation && (
+
+            {/* Navigation Info */}
+            {(fromScreen || pendingNavigation) && (
               <View style={styles.pendingInfo}>
                 <Icon name="info-circle" size={16} color="#3b82f6" />
                 <Text style={styles.pendingText}>
@@ -241,7 +308,12 @@ const LoginScreen = ({ navigation }) => {
 
               {/* Email Input */}
               <View style={styles.inputContainer}>
-                <Icon name="envelope-o" size={16} color="#6B7280" style={styles.inputIcon} />
+                <Icon
+                  name="envelope-o"
+                  size={16}
+                  color="#6B7280"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="Email address"
@@ -257,7 +329,12 @@ const LoginScreen = ({ navigation }) => {
 
               {/* Password Input */}
               <View style={styles.inputContainer}>
-                <Icon name="lock" size={16} color="#6B7280" style={styles.inputIcon} />
+                <Icon
+                  name="lock"
+                  size={16}
+                  color="#6B7280"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={[styles.input, styles.passwordInput]}
                   placeholder="Password"
@@ -281,7 +358,7 @@ const LoginScreen = ({ navigation }) => {
               </View>
 
               {/* Forgot Password */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.forgotPassword}
                 onPress={handleForgotPassword}
                 disabled={isLogging}
@@ -293,7 +370,10 @@ const LoginScreen = ({ navigation }) => {
 
               {/* Sign In Button */}
               <TouchableOpacity
-                style={[styles.signInButton, isLogging && styles.signInButtonDisabled]}
+                style={[
+                  styles.signInButton,
+                  isLogging && styles.signInButtonDisabled,
+                ]}
                 onPress={handleEmailSignIn}
                 disabled={isLogging}
               >
@@ -313,9 +393,17 @@ const LoginScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
           </View>
+          <CustomAlert
+            visible={alertConfig.visible}
+            title={alertConfig.title}
+            message={alertConfig.message}
+            buttons={alertConfig.buttons}
+            showCancel={alertConfig.showCancel}
+            cancelText={alertConfig.cancelText}
+            vibrate={alertConfig.vibrate}
+            onDismiss={hideAlert}
+          />
 
-          {/* Social Login Section (Optional) */}
-        
           {/* Footer */}
           <View style={styles.footer}>
             <View style={styles.footerTextContainer}>
@@ -385,7 +473,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
   },
-  
+
   // Pending Navigation Info
   pendingInfo: {
     flexDirection: 'row',
@@ -503,51 +591,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-  },
-
-  // Social Login
-  socialSection: {
-    marginBottom: 32,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  dividerText: {
-    fontSize: 14,
-    color: '#6B7280',
-    paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  socialButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-  },
-  socialIcon: {
-    marginRight: 8,
-  },
-  socialButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
   },
 
   footer: {
