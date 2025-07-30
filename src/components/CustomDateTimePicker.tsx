@@ -112,7 +112,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
     if (mode === 'date') return dateStr;
     if (mode === 'time') return time;
     
-    return `${dateStr}, ${time}`;
+    return `${dateStr}`;
   };
 
   const showModal = () => {
@@ -269,12 +269,12 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
         disabled={disabled}
       >
         <View style={styles.inputContent}>
-          <Icon 
+          {/* <Icon 
             name={mode === 'time' ? 'clock' : mode === 'date' ? 'calendar' : 'calendar'} 
             size={22} 
             color={disabled ? COLORS.textMuted : error ? COLORS.error : COLORS.primary} 
             style={styles.inputIcon}
-          />
+          /> */}
           <Text style={[
             styles.inputText,
             !value && styles.inputTextPlaceholder,
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
   },
 
   inputText: {
-    fontSize: 16,
+    fontSize: 14,
     color: COLORS.text,
     fontWeight: '500',
     flex: 1,

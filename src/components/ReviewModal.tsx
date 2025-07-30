@@ -1100,15 +1100,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: screenHeight,
-    minHeight: screenHeight,
+    maxHeight: screenHeight * 0.9,
+    minHeight: screenHeight * 0.9,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 16,
   },
-  
+
   // Header
   modalHeader: {
     flexDirection: 'row',
@@ -1150,7 +1150,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#f3f4f6',
   },
-  
+
   // Content
   scrollContent: {
     flex: 1,
@@ -1181,7 +1181,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
   },
-  
+
   // Fields
   fieldContainer: {
     marginBottom: 16,
@@ -1243,7 +1243,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#1f2937',
   },
-  
+
   // Currency Info
   currencyInfoContainer: {
     gap: 4,
@@ -1254,7 +1254,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 2,
   },
-  
+
   // Custom Auction Group
   customGroupContainer: {
     gap: 8,
@@ -1289,7 +1289,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '500',
   },
-  
+
   // Product Type
   productTypeContainer: {
     gap: 12,
@@ -1336,7 +1336,7 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 2,
   },
-  
+
   // Validation Summary
   validationSummary: {
     backgroundColor: '#fef2f2',
@@ -1352,7 +1352,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginLeft: 8,
   },
-  
+
   // Summary
   summarySection: {
     marginBottom: 24,
@@ -1386,7 +1386,7 @@ const styles = StyleSheet.create({
   bottomSpacing: {
     height: 16,
   },
-  
+
   // Buttons
   buttonContainer: {
     flexDirection: 'row',

@@ -61,16 +61,20 @@ const CustomDropdown = ({
             </>
           ) : (
             <>
-              <Text style={[
-                styles.dropdownText,
-                !selectedValue && styles.dropdownPlaceholder
-              ]}>
+              <Text
+                style={[
+                  styles.dropdownText,
+                  !selectedValue && styles.dropdownPlaceholder,
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {getDisplayValue()}
               </Text>
-              <Icon 
-                name={isVisible ? "chevron-up" : "chevron-down"} 
-                size={16} 
-                color="#6b7280" 
+              <Icon
+                name={isVisible ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color="#6b7280"
               />
             </>
           )}
@@ -84,16 +88,14 @@ const CustomDropdown = ({
         animationType="fade"
         onRequestClose={() => setIsVisible(false)}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setIsVisible(false)}
         >
           <View style={styles.dropdownModal}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {label || "Select Option"}
-              </Text>
+              <Text style={styles.modalTitle}>{label || 'Select Option'}</Text>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={() => setIsVisible(false)}
@@ -102,7 +104,7 @@ const CustomDropdown = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView 
+            <ScrollView
               style={styles.optionsList}
               showsVerticalScrollIndicator={false}
             >
@@ -113,13 +115,19 @@ const CustomDropdown = ({
                 </View>
               ) : (
                 options.map((option, index) => {
-                  const optionValue = typeof option === 'object' ? 
-                    (option.name || option.label || option.value || String(option)) : 
-                    String(option);
-                  
-                  const isSelected = selectedValue === option || 
+                  const optionValue =
+                    typeof option === 'object'
+                      ? option.name ||
+                        option.label ||
+                        option.value ||
+                        String(option)
+                      : String(option);
+
+                  const isSelected =
+                    selectedValue === option ||
                     selectedValue === optionValue ||
-                    (typeof selectedValue === 'object' && selectedValue.name === optionValue);
+                    (typeof selectedValue === 'object' &&
+                      selectedValue.name === optionValue);
 
                   return (
                     <TouchableOpacity
@@ -131,10 +139,12 @@ const CustomDropdown = ({
                       ]}
                       onPress={() => handleSelect(option)}
                     >
-                      <Text style={[
-                        styles.optionText,
-                        isSelected && styles.optionTextSelected,
-                      ]}>
+                      <Text
+                        style={[
+                          styles.optionText,
+                          isSelected && styles.optionTextSelected,
+                        ]}
+                      >
                         {optionValue}
                       </Text>
                       {isSelected && (

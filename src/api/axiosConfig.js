@@ -204,7 +204,54 @@ export const apiService = {
     });
   },
 
-  // Fixed submitProduct method
+  // Direct FormData POST method
+  saveProductDirect: async (formData) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      
+      const response = await axios.post(
+        'https://greenbidz.com/wp-json/greenbidz-api/v1/submit-product',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Accept': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          timeout: 120000,
+        }
+      );
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error in saveProductDirect:', error);
+      throw error;
+    }
+  },
+
+  // Simplified saveProduct method for direct FormData POST
+  saveProduct: async (formData) => {
+    try {
+      console.log('📤 Posting FormData directly to submit-product endpoint...');
+      
+      const token = await AsyncStorage.getItem('userToken');
+      
+      const response = await apiClient.post('/submit-product', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        timeout: 120000, // 2 minutes for file uploads
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error in saveProduct:', error);
+      throw error;
+    }
+  },
+
+  // Original submitProduct method
   submitProduct: async (productData, images = [], documents = [], videos = []) => {
     try {
       console.log('📝 Preparing product submission...');
@@ -217,6 +264,7 @@ export const apiService = {
       
       // Append product data - ensure all values are strings
       Object.keys(productData).forEach(key => {
+        console.log(key, productData[key],"jiopppp")
         if (productData[key] !== null && productData[key] !== undefined) {
           // Convert objects/arrays to JSON strings
           const value = typeof productData[key] === 'object' 
@@ -278,7 +326,7 @@ export const apiService = {
 
       console.log('📤 Submitting product with FormData...');
       
-      return await apiService.uploadFiles('/submit-product', formData);
+      return await apiService.uploadFiles('/submit-product', productData);
       
     } catch (error) {
       console.error('❌ Error in submitProduct:', error);
@@ -286,9 +334,7 @@ export const apiService = {
     }
   },
 
-
-
-  // Other API methods
+  // Authentication methods
   login: credentials => {
     return axios.post(
       'https://greenbidz.com/wp-json/jwt-auth/v1/token',
@@ -298,12 +344,20 @@ export const apiService = {
   },
   
   register: userData => apiService.post('/register', userData),
+  
+  // User profile methods
   updateProfile: profileData => apiService.post('/user-profile/update', profileData),
+  getUser: () => apiService.get('/user-profile'),
+  
+  // Product methods
   getProducts: (params = {}) => apiService.get('/products', { params }),
   getProduct: id => apiService.get(`/products/${id}`),
-  analyzeImage: imageData => apiService.post('/analize_process_images', imageData),
-  saveProduct: productData => apiService.post('/submit-product', productData),
   getAllListing: () => apiService.get('/my-products'),
+  
+  // Image analysis
+  analyzeImage: imageData => apiService.post('/analize_process_images', imageData),
+  
+  // Category methods 
   getCategories: () => apiService.get('/categories'),
   
   getSubCategories: (parentId) => {
@@ -312,10 +366,6 @@ export const apiService = {
     });
   },
   
-  getLocations: () => apiService.get('/locations'),
-  getAuctionGroups: () => apiService.get('/auction-groups'),
-  getUser: () => apiService.get('/user-profile'),
-
   getCategoryIdByName: async (categoryName) => {
     try {
       const response = await apiService.get('/categories');
@@ -331,6 +381,12 @@ export const apiService = {
       return null;
     }
   },
+  
+  // Location methods
+  getLocations: () => apiService.get('/locations'),
+  
+  // Auction methods
+  getAuctionGroups: () => apiService.get('/auction-groups'),
 };
 
 export default apiClient;

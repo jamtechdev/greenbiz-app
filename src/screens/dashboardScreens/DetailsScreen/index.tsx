@@ -327,14 +327,13 @@ export default function DetailsScreen({ route, navigation }) {
       });
     }
   };
-
- const handleSubmitListing = async () => {
+const handleSubmitListing = async () => {
   try {
     // Ensure product_title is provided
     if (!fields.name.value) {
       Alert.alert('Validation Error', 'Product title is required');
       setIsSubmitting(false);
-      return; // Stop further execution
+      return;
     }
 
     console.log('🚀 Starting product submission...');
@@ -342,12 +341,11 @@ export default function DetailsScreen({ route, navigation }) {
 
     // Process media files first
     const documents = mediaFiles.filter(
-      (file) =>
-        file.category === 'documents' && file.type === 'application/pdf',
+      file => file.category === 'documents' && file.type === 'application/pdf',
     );
 
     const videos = mediaFiles.filter(
-      (file) => file.category === 'videos' && file.type === 'video/mp4',
+      file => file.category === 'videos' && file.type === 'video/mp4',
     );
 
     console.log(selectedImages, 'selectedImagesselectedImagesselectedImages');
@@ -361,41 +359,52 @@ export default function DetailsScreen({ route, navigation }) {
     formData.append('brand', fields.brand?.value || '');
     formData.append('model', fields.model?.value || '');
     formData.append('item_condition', fields.condition?.value || 'New/Unused');
-    formData.append('operation_status', fields.operation_status?.value || 'Running');
-    formData.append('manufacturing_year', fields.year?.value || new Date().getFullYear().toString());
+    formData.append(
+      'operation_status',
+      fields.operation_status?.value || 'Running',
+    );
+    formData.append(
+      'manufacturing_year',
+      fields.year?.value || new Date().getFullYear().toString(),
+    );
     formData.append('price', fields.original_price?.value || '0');
-    formData.append('product_type', (fields.product_type?.value || 'Marketplace').toLowerCase());
+    formData.append(
+      'product_type',
+      (fields.product_type?.value || 'Marketplace').toLowerCase(),
+    );
     formData.append('currency', fields.currency?.value || 'USD');
 
-    // Handle images - append each image file to FormData
-    const imagePromises = selectedImages.map(async (imageUri, index) => {
-      if (typeof imageUri === 'string') {
-        // For React Native, create file object from URI
-        const fileExtension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-        const fileName = `image_${index}.${fileExtension}`;
-        const mimeType = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`;
-        
-        // For React Native file upload
-        formData.append('images[]', {
-          uri: imageUri,
-          type: mimeType,
-          name: fileName,
-        });
-      } else if (imageUri && imageUri.uri) {
-        formData.append('images[]', {
-          uri: imageUri.uri,
-          type: imageUri.type || 'image/jpeg',
-          name: imageUri.name || `image_${index}.jpg`,
-        });
-      }
-    });
+    // Handle images - Use consistent field naming
+    if (selectedImages && selectedImages.length > 0) {
+      for (let index = 0; index < selectedImages.length; index++) {
+        const imageUri = selectedImages[index];
 
-    // Wait for all image processing to complete
-    await Promise.all(imagePromises);
+        if (typeof imageUri === 'string') {
+          const fileExtension =
+            imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+          const fileName = `image_${index}.${fileExtension}`;
+          const mimeType = `image/${
+            fileExtension === 'jpg' ? 'jpeg' : fileExtension
+          }`;
+
+          formData.append('images[]', {
+            uri: imageUri,
+            type: mimeType,
+            name: fileName,
+          });
+        } else if (imageUri && imageUri.uri) {
+          formData.append('images[]', {
+            uri: imageUri.uri,
+            type: imageUri.type || 'image/jpeg',
+            name: imageUri.name || `image_${index}.jpg`,
+          });
+        }
+      }
+    }
 
     // Handle documents
     documents.forEach((doc, index) => {
-      formData.append('documents', {
+      formData.append('documents[]', {
         uri: doc.uri,
         type: doc.type || 'application/pdf',
         name: doc.name || `document_${index}.pdf`,
@@ -404,7 +413,7 @@ export default function DetailsScreen({ route, navigation }) {
 
     // Handle videos
     videos.forEach((video, index) => {
-      formData.append('video', {
+      formData.append('videos[]', {
         uri: video.uri,
         type: video.type || 'video/mp4',
         name: video.name || `video_${index}.mp4`,
@@ -412,14 +421,25 @@ export default function DetailsScreen({ route, navigation }) {
     });
 
     // Add auction-specific fields if product type is auction
-    const productType = (fields.product_type?.value || 'Marketplace').toLowerCase();
+    const productType = (
+      fields.product_type?.value || 'Marketplace'
+    ).toLowerCase();
     if (productType === 'auction') {
-      formData.append('_yith_auction_for', fields.auction_start_date?.value || '');
+      formData.append(
+        '_yith_auction_for',
+        fields.auction_start_date?.value || '',
+      );
       formData.append('_yith_auction_to', fields.auction_end_date?.value || '');
-      formData.append('_yith_auction_start_price', fields.auction_start_price?.value || '0');
+      formData.append(
+        '_yith_auction_start_price',
+        fields.auction_start_price?.value || '0',
+      );
       formData.append('auction_group', fields.auction_group?.value || '');
       formData.append('reserve_price', fields.reserve_price?.value || '');
-      formData.append('auction_currency', fields.auction_currency?.value || 'USD ($)');
+      formData.append(
+        'auction_currency',
+        fields.auction_currency?.value || 'USD ($)',
+      );
     }
 
     // Add optional fields
@@ -444,14 +464,40 @@ export default function DetailsScreen({ route, navigation }) {
       fields.reselling_price_value?.value &&
       Object.keys(fields.reselling_price_value.value).length > 0
     ) {
-      formData.append('market_analysis', JSON.stringify(fields.reselling_price_value.value));
-      formData.append('suggested_reselling_price', fields.reselling_price?.value || '0');
-      formData.append('min_reselling_price', fields.min_reselling_price?.value || '0');
-      formData.append('max_reselling_price', fields.max_reselling_price?.value || '0');
+      formData.append(
+        'market_analysis',
+        JSON.stringify(fields.reselling_price_value.value),
+      );
+      formData.append(
+        'suggested_reselling_price',
+        fields.reselling_price?.value || '0',
+      );
+      formData.append(
+        'min_reselling_price',
+        fields.min_reselling_price?.value || '0',
+      );
+      formData.append(
+        'max_reselling_price',
+        fields.max_reselling_price?.value || '0',
+      );
     }
 
-    // Submit using FormData
-    const response = await apiService.saveProduct(formData);
+    // Debug: Log FormData contents (React Native specific)
+    console.log('📝 FormData contents:');
+    if (formData._parts) {
+      formData._parts.forEach(([key, value]) => {
+        console.log(
+          `${key}:`,
+          typeof value === 'object' && value.uri
+            ? `File: ${value.name}`
+            : value,
+        );
+      });
+    }
+    console.log(formData, 'formDataformDataformDataformData');
+
+    // Submit using the corrected saveProduct method
+    const response = await apiService.submitProduct(formData);
 
     console.log('✅ Submission successful:', response.data);
     setIsSubmitting(false);
@@ -478,7 +524,6 @@ export default function DetailsScreen({ route, navigation }) {
     } else if (error.response?.status === 422) {
       const validationErrors = error.response.data?.errors;
       if (validationErrors) {
-        // Format validation errors
         const errorMessages = Object.values(validationErrors).flat();
         errorMessage =
           errorMessages.length > 0
@@ -790,7 +835,7 @@ export default function DetailsScreen({ route, navigation }) {
             </TouchableOpacity>
 
             <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Equipment Details</Text>
+              <Text style={styles.headerTitle}>Product Details</Text>
               {selectedImages.length > 1 && (
                 <Text style={styles.headerSubtitle}>
                   {selectedImages.length} images analyzed
@@ -1029,7 +1074,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    marginVertical:4,
+    paddingVertical: 3,
     gap: 16,
   },
   backButton: {
