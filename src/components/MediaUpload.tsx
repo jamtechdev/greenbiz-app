@@ -6,12 +6,11 @@ import {
   StyleSheet,
   Alert,
   FlatList,
-  Image,
   Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
-// Correct import for @react-native-documents/picker
+// Your existing import
 let documentPicker;
 
 try {
@@ -23,45 +22,34 @@ try {
   documentPicker = null;
 }
 
-const MediaUploadComponent = ({ 
+const DocumentsUploadComponent = ({ 
   onFilesSelected, 
   uploadedFiles = [], 
   maxFiles = 10,
-  allowedTypes = ['documents', 'videos'], // Removed 'images'
   style 
 }) => {
   const [isUploading, setIsUploading] = useState(false);
 
-  // File type configurations (removed images)
-  const fileTypeConfig = {
-    documents: {
-      icon: 'file-text',
-      color: '#3b82f6',
-      backgroundColor: '#eff6ff',
-      extensions: ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx'],
-      documentTypes: documentPicker?.types ? [
-        documentPicker.types.pdf,
-        documentPicker.types.doc,
-        documentPicker.types.docx,
-        documentPicker.types.plainText,
-        documentPicker.types.xls,
-        documentPicker.types.xlsx,
-      ] : ['public.data'],
-      maxSize: 25 * 1024 * 1024, // 25MB
-    },
-    videos: {
-      icon: 'video',
-      color: '#8b5cf6',
-      backgroundColor: '#f5f3ff',
-      extensions: ['mp4', 'mov', 'avi', 'mkv'],
-      documentTypes: documentPicker?.types ? [documentPicker.types.video] : ['public.movie'],
-      maxSize: 100 * 1024 * 1024, // 100MB
-    },
+  // Only document configuration (removed videos)
+  const documentConfig = {
+    icon: 'file-text',
+    color: '#3b82f6',
+    backgroundColor: '#eff6ff',
+    extensions: ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx'],
+    documentTypes: documentPicker?.types ? [
+      documentPicker.types.pdf,
+      documentPicker.types.doc,
+      documentPicker.types.docx,
+      documentPicker.types.plainText,
+      documentPicker.types.xls,
+      documentPicker.types.xlsx,
+    ] : ['public.data'],
+    maxSize: 25 * 1024 * 1024, // 25MB
   };
 
-  // Show action sheet for different upload options (removed image handling)
-  const showUploadOptions = (fileType) => {
-    console.log('📱 showUploadOptions called with fileType:', fileType);
+  // Open document picker
+  const openDocumentPicker = async () => {
+    console.log('📄 Opening document picker');
     
     if (!documentPicker) {
       Alert.alert(
@@ -71,34 +59,21 @@ const MediaUploadComponent = ({
       );
       return;
     }
-    
-    openDocumentPicker(fileType);
-  };
-
-  // Open document picker using correct @react-native-documents/picker API
-  const openDocumentPicker = async (fileType) => {
-    console.log('📄 Opening document picker for:', fileType);
-    
-    if (!documentPicker?.pick) {
-      Alert.alert('Error', 'Document picker not available');
-      return;
-    }
 
     try {
       setIsUploading(true);
-      const config = fileTypeConfig[fileType];
       
       console.log('📄 Document picker config:', {
-        type: config.documentTypes,
+        type: documentConfig.documentTypes,
         allowMultiSelection: true,
         mode: 'import',
       });
 
-      // Use the correct API for @react-native-documents/picker
+      // Use your existing API
       const results = await documentPicker.pick({
-        type: config.documentTypes,
+        type: documentConfig.documentTypes,
         allowMultiSelection: true,
-        mode: 'import', // This copies files to app directory
+        mode: 'import',
       });
 
       console.log('📄 Document picker results:', results);
@@ -111,7 +86,7 @@ const MediaUploadComponent = ({
         name: result.name,
         type: result.type || 'application/octet-stream',
         size: result.size || 0,
-        category: fileType,
+        category: 'documents',
       }));
 
       console.log('📄 Files processed:', files);
@@ -119,7 +94,7 @@ const MediaUploadComponent = ({
     } catch (error) {
       console.error('📄 Document picker error:', error);
       
-      // Check if user cancelled (different for this package)
+      // Check if user cancelled (for your package)
       if (error.code === 'DOCUMENT_PICKER_CANCELED') {
         console.log('Document picker cancelled');
       } else {
@@ -138,34 +113,15 @@ const MediaUploadComponent = ({
     const errors = [];
 
     files.forEach(file => {
-      // Ensure file has a category, default to 'documents' if missing
-      if (!file.category) {
-        const extension = file.name.split('.').pop()?.toLowerCase();
-        if (['mp4', 'mov', 'avi', 'mkv'].includes(extension)) {
-          file.category = 'videos';
-        } else {
-          file.category = 'documents';
-        }
-      }
-      
-      const config = fileTypeConfig[file.category];
-      
-      // If config doesn't exist, skip validation but allow file
-      if (!config) {
-        console.warn(`No config found for category: ${file.category}, allowing file anyway`);
-        validatedFiles.push(file);
-        return;
-      }
-      
       // Check file size
-      if (file.size > config.maxSize) {
-        errors.push(`${file.name} is too large. Maximum size is ${(config.maxSize / 1024 / 1024).toFixed(0)}MB`);
+      if (file.size > documentConfig.maxSize) {
+        errors.push(`${file.name} is too large. Maximum size is ${(documentConfig.maxSize / 1024 / 1024).toFixed(0)}MB`);
         return;
       }
 
       // Check file extension
       const extension = file.name.split('.').pop()?.toLowerCase();
-      if (extension && !config.extensions.includes(extension)) {
+      if (extension && !documentConfig.extensions.includes(extension)) {
         errors.push(`${file.name} has an unsupported format`);
         return;
       }
@@ -201,19 +157,22 @@ const MediaUploadComponent = ({
 
   // Get file icon and color based on type
   const getFileDisplay = (file) => {
-    // Default fallback config
-    const defaultConfig = {
-      icon: 'file',
-      color: '#6b7280',
-      backgroundColor: '#f3f4f6',
-    };
+    const extension = file.name.split('.').pop()?.toLowerCase();
     
-    const config = fileTypeConfig[file.category] || defaultConfig;
-    return {
-      icon: config.icon,
-      color: config.color,
-      backgroundColor: config.backgroundColor,
-    };
+    switch (extension) {
+      case 'pdf':
+        return { icon: 'file-text', color: '#dc2626', backgroundColor: '#fef2f2' };
+      case 'doc':
+      case 'docx':
+        return { icon: 'file-text', color: '#2563eb', backgroundColor: '#eff6ff' };
+      case 'xls':
+      case 'xlsx':
+        return { icon: 'grid', color: '#059669', backgroundColor: '#ecfdf5' };
+      case 'txt':
+        return { icon: 'file', color: '#6b7280', backgroundColor: '#f9fafb' };
+      default:
+        return { icon: 'file', color: '#6b7280', backgroundColor: '#f9fafb' };
+    }
   };
 
   // Format file size
@@ -225,57 +184,8 @@ const MediaUploadComponent = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Render upload buttons (only documents and videos)
-  const renderUploadButtons = () => {
-    return allowedTypes.map(type => {
-      const config = fileTypeConfig[type];
-      
-      // Safety check - if config doesn't exist, skip this button
-      if (!config) {
-        console.warn(`No config found for type: ${type}`);
-        return null;
-      }
-      
-      const isDisabled = uploadedFiles.length >= maxFiles;
-      
-      return (
-        <TouchableOpacity
-          key={type}
-          style={[
-            styles.uploadButton,
-            { backgroundColor: config.backgroundColor },
-            isDisabled && styles.uploadButtonDisabled,
-          ]}
-          onPress={() => {
-            console.log(`🎯 Upload button pressed for: ${type}`);
-            showUploadOptions(type);
-          }}
-          disabled={isDisabled || isUploading}
-        >
-          <View style={[styles.uploadIcon, { backgroundColor: config.color }]}>
-            <Icon name={config.icon} size={16} color="#fff" />
-          </View>
-          <View style={styles.uploadContent}>
-            <Text style={[styles.uploadTitle, { color: config.color }]}>
-              {type === 'documents' ? 'Add Documents' : 'Add Videos'}
-            </Text>
-            <Text style={styles.uploadSubtitle}>
-              {type === 'documents' ? 'PDF, DOC, XLS files' : 'MP4, MOV video files'}
-            </Text>
-          </View>
-          <Icon 
-            name="plus" 
-            size={16} 
-            color={isDisabled ? '#9ca3af' : config.color} 
-          />
-        </TouchableOpacity>
-      );
-    }).filter(Boolean); // Remove null values
-  };
-
-  // Render file item (removed image preview since no images allowed)
+  // Render file item
   const renderFileItem = ({ item, index }) => {
-    // Add safety check for item
     if (!item) {
       console.warn('renderFileItem: item is null/undefined');
       return null;
@@ -297,12 +207,6 @@ const MediaUploadComponent = ({
             <Text style={styles.fileSize}>
               {formatFileSize(item.size || 0)}
             </Text>
-            {/* Add debug info in development */}
-            {__DEV__ && (
-              <Text style={styles.debugFileText}>
-                Category: {item.category || 'undefined'}
-              </Text>
-            )}
           </View>
         </View>
 
@@ -316,28 +220,37 @@ const MediaUploadComponent = ({
     );
   };
 
+  const isDisabled = uploadedFiles.length >= maxFiles;
+
   return (
     <View style={[styles.container, style]}>
-      {/* Debug Info */}
-      {__DEV__ && (
-        <View style={styles.debugContainer}>
-          <Text style={styles.debugText}>Debug Info:</Text>
-          <Text style={styles.debugText}>
-            • AllowedTypes: {JSON.stringify(allowedTypes)}
+      {/* Upload Button - Only Documents */}
+      <TouchableOpacity
+        style={[
+          styles.uploadButton,
+          { backgroundColor: documentConfig.backgroundColor },
+          isDisabled && styles.uploadButtonDisabled,
+        ]}
+        onPress={openDocumentPicker}
+        disabled={isDisabled || isUploading}
+      >
+        <View style={[styles.uploadIcon, { backgroundColor: documentConfig.color }]}>
+          <Icon name={documentConfig.icon} size={16} color="#fff" />
+        </View>
+        <View style={styles.uploadContent}>
+          <Text style={[styles.uploadTitle, { color: documentConfig.color }]}>
+            Add Documents
           </Text>
-          <Text style={styles.debugText}>
-            • FileTypeConfig Keys: {JSON.stringify(Object.keys(fileTypeConfig))}
-          </Text>
-          <Text style={styles.debugText}>
-            • DocumentPicker: {documentPicker?.pick ? '✅ Available' : '❌ Not found'}
+          <Text style={styles.uploadSubtitle}>
+            PDF, DOC, XLS files
           </Text>
         </View>
-      )}
-      
-      {/* Upload Buttons */}
-      <View style={styles.uploadSection}>
-        {renderUploadButtons()}
-      </View>
+        <Icon 
+          name="plus" 
+          size={16} 
+          color={isDisabled ? '#9ca3af' : documentConfig.color} 
+        />
+      </TouchableOpacity>
 
       {/* File List */}
       {uploadedFiles.length > 0 && (
@@ -382,24 +295,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  debugContainer: {
-    backgroundColor: '#f3f4f6',
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#ef4444',
-  },
-  debugText: {
-    fontSize: 10,
-    color: '#dc2626',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    marginBottom: 2,
-  },
-  uploadSection: {
-    gap: 12,
-    marginBottom: 16,
-  },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -427,11 +322,13 @@ const styles = StyleSheet.create({
   uploadTitle: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
   },
   uploadSubtitle: {
     fontSize: 12,
     color: '#6b7280',
     marginTop: 2,
+    fontFamily: 'Poppins-Regular',
   },
   fileList: {
     marginTop: 8,
@@ -443,6 +340,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
+    fontFamily: 'Poppins-SemiBold',
   },
   fileListContainer: {
     maxHeight: 200,
@@ -479,11 +377,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: '#1f2937',
+    fontFamily: 'Poppins-Medium',
   },
   fileSize: {
     fontSize: 11,
     color: '#6b7280',
     marginTop: 2,
+    fontFamily: 'Poppins-Regular',
   },
   removeButton: {
     padding: 4,
@@ -498,6 +398,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6366f1',
     fontStyle: 'italic',
+    fontFamily: 'Poppins-Regular',
   },
   infoContainer: {
     marginTop: 8,
@@ -509,13 +410,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     textAlign: 'center',
-  },
-  debugFileText: {
-    fontSize: 10,
-    color: '#ef4444',
-    fontStyle: 'italic',
-    marginTop: 2,
+    fontFamily: 'Poppins-Regular',
   },
 });
 
-export default MediaUploadComponent;
+export default DocumentsUploadComponent;

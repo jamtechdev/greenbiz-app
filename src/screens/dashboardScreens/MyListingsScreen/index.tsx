@@ -20,6 +20,7 @@ import { useAppContext } from '../../../_customContext/AppProvider';
 
 import { apiService } from '../../../api/axiosConfig';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
+import { useSelector } from 'react-redux';
 
 const { width, height } = Dimensions.get('window');
 
@@ -41,10 +42,16 @@ export default function MyListingsScreen({ navigation }) {
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(50))[0];
   const scaleAnim = useState(new Animated.Value(0.9))[0];
+  const { user, isAuthenticated, token } = useSelector(
+    state => state.auth || {},
+  );
 
   // Fetch listings on component mount
   useEffect(() => {
-    fetchListings();
+    if (isAuthenticated) {
+      fetchListings();
+    }
+
     // Start animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -77,9 +84,9 @@ export default function MyListingsScreen({ navigation }) {
     try {
       setLoading(true);
       console.log('🔄 Fetching user listings...');
-      
+
       const response = await apiService.getAllListing();
-      
+
       if (response.data && response.data.success) {
         const listingsData = response.data.data || [];
         setListings(listingsData);
@@ -93,7 +100,8 @@ export default function MyListingsScreen({ navigation }) {
     } catch (error) {
       console.error('❌ Error fetching listings:', error);
       // Error is handled by axios interceptor, but we can show a specific message
-      if (error.response?.status !== 401) { // Don't show error for auth issues
+      if (error.response?.status !== 401) {
+        // Don't show error for auth issues
         showError({
           title: 'Failed to Load Listings',
           message: 'Unable to fetch your listings. Please try again.',
@@ -106,15 +114,15 @@ export default function MyListingsScreen({ navigation }) {
     }
   };
 
-  const calculateStats = (listingsData) => {
-    const published = listingsData.filter(item => 
-      item.status === 'published' || item.status === 'publish'
+  const calculateStats = listingsData => {
+    const published = listingsData.filter(
+      item => item.status === 'published' || item.status === 'publish',
     ).length;
-    
-    const pending = listingsData.filter(item => 
-      item.status === 'pending' || item.status === 'draft'
+
+    const pending = listingsData.filter(
+      item => item.status === 'pending' || item.status === 'draft',
     ).length;
-    
+
     // Since your API doesn't return views, we'll set totalViews to 0 or use a placeholder
     const totalViews = 0; // You can update this when view data is available
 
@@ -126,27 +134,27 @@ export default function MyListingsScreen({ navigation }) {
     fetchListings();
   }, []);
 
-  const handleViewDetails = (listing) => {
+  const handleViewDetails = listing => {
     setActiveMenuId(null);
     // Navigate to listing details screen
-    navigation.navigate('ListingDetails', { 
+    navigation.navigate('ListingDetails', {
       listingId: listing.ID,
-      listing: listing 
+      listing: listing,
     });
   };
 
-  const handleEditListing = (listing) => {
+  const handleEditListing = listing => {
     setActiveMenuId(null);
     // Navigate to edit screen
-    navigation.navigate('EditListing', { 
+    navigation.navigate('EditListing', {
       listingId: listing.ID,
-      listing: listing 
+      listing: listing,
     });
   };
 
-  const handleDeleteListing = (listing) => {
+  const handleDeleteListing = listing => {
     setActiveMenuId(null);
-    
+
     showConfirm({
       title: 'Delete Listing',
       message: `Are you sure you want to delete "${listing.title}"? This action cannot be undone.`,
@@ -155,9 +163,9 @@ export default function MyListingsScreen({ navigation }) {
       onConfirm: async () => {
         try {
           console.log('🗑️ Deleting listing:', listing.ID);
-          
+
           await apiService.deleteListing(listing.ID);
-          
+
           showSuccess({
             title: 'Listing Deleted',
             message: 'Your listing has been successfully deleted.',
@@ -166,7 +174,6 @@ export default function MyListingsScreen({ navigation }) {
               fetchListings();
             },
           });
-          
         } catch (error) {
           console.error('❌ Error deleting listing:', error);
           showError({
@@ -178,7 +185,7 @@ export default function MyListingsScreen({ navigation }) {
     });
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = dateString => {
     if (!dateString) return 'Unknown';
     try {
       const date = new Date(dateString);
@@ -192,7 +199,7 @@ export default function MyListingsScreen({ navigation }) {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = status => {
     switch (status?.toLowerCase()) {
       case 'published':
       case 'publish':
@@ -205,7 +212,7 @@ export default function MyListingsScreen({ navigation }) {
     }
   };
 
-  const getConditionColor = (condition) => {
+  const getConditionColor = condition => {
     switch (condition?.toLowerCase()) {
       case 'new':
         return { bg: '#10b98120', text: '#10b981' };
@@ -234,13 +241,17 @@ export default function MyListingsScreen({ navigation }) {
 
   return (
     <>
-      <StatusBar barStyle="dark-content" backgroundColor="#c0faf5" translucent />
-      <ScrollView 
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#c0faf5"
+        translucent
+      />
+      <ScrollView
         style={styles.container}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
+          <RefreshControl
+            refreshing={refreshing}
             onRefresh={onRefresh}
             colors={['#3b82f6']}
             tintColor="#3b82f6"
@@ -250,7 +261,7 @@ export default function MyListingsScreen({ navigation }) {
       >
         {/* Simplified Clean Header */}
         <View style={styles.header}>
-          <Animated.View 
+          <Animated.View
             style={[
               styles.headerContent,
               {
@@ -265,13 +276,14 @@ export default function MyListingsScreen({ navigation }) {
                 <View style={styles.headerBadge}>
                   <Icon name="package" size={14} color="#6b7280" />
                   <Text style={styles.headerSubtitle}>
-                    {listings.length} machine{listings.length !== 1 ? 's' : ''} listed
+                    {listings.length} machine{listings.length !== 1 ? 's' : ''}{' '}
+                    listed
                   </Text>
                 </View>
               </View>
-              
-              <TouchableOpacity 
-                style={styles.addButton} 
+
+              <TouchableOpacity
+                style={styles.addButton}
                 onPress={() => setShowOverlay(true)}
                 activeOpacity={0.8}
               >
@@ -279,9 +291,9 @@ export default function MyListingsScreen({ navigation }) {
                 <Text style={styles.addButtonText}>Add New</Text>
               </TouchableOpacity>
             </View>
-            
+
             {/* Clean Stats Cards */}
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.statsContainer,
                 {
@@ -292,27 +304,48 @@ export default function MyListingsScreen({ navigation }) {
             >
               <View style={styles.statsRow}>
                 <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: '#e0f4f3' }]}>
+                  <View
+                    style={[
+                      styles.statIconContainer,
+                      { backgroundColor: '#e0f4f3' },
+                    ]}
+                  >
                     <Icon name="check-circle" size={22} color="#0d9488" />
                   </View>
                   <Text style={styles.statValue}>{stats.published}</Text>
-                  <Text style={[styles.statLabel, { color: '#0d9488' }]}>Published</Text>
+                  <Text style={[styles.statLabel, { color: '#0d9488' }]}>
+                    Published
+                  </Text>
                 </View>
-                
+
                 <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: '#f0f4ff' }]}>
+                  <View
+                    style={[
+                      styles.statIconContainer,
+                      { backgroundColor: '#f0f4ff' },
+                    ]}
+                  >
                     <Icon name="clock" size={22} color="#4f46e5" />
                   </View>
                   <Text style={styles.statValue}>{stats.pending}</Text>
-                  <Text style={[styles.statLabel, { color: '#4f46e5' }]}>Pending</Text>
+                  <Text style={[styles.statLabel, { color: '#4f46e5' }]}>
+                    Pending
+                  </Text>
                 </View>
-                
+
                 <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: '#ecfdf5' }]}>
+                  <View
+                    style={[
+                      styles.statIconContainer,
+                      { backgroundColor: '#ecfdf5' },
+                    ]}
+                  >
                     <Icon name="eye" size={22} color="#059669" />
                   </View>
                   <Text style={styles.statValue}>{stats.totalViews}</Text>
-                  <Text style={[styles.statLabel, { color: '#059669' }]}>Total Views</Text>
+                  <Text style={[styles.statLabel, { color: '#059669' }]}>
+                    Total Views
+                  </Text>
                 </View>
               </View>
             </Animated.View>
@@ -322,7 +355,7 @@ export default function MyListingsScreen({ navigation }) {
         {/* Enhanced Listings Section */}
         <View style={styles.listingContainer}>
           {listings.length === 0 ? (
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.emptyState,
                 {
@@ -336,22 +369,29 @@ export default function MyListingsScreen({ navigation }) {
               </View>
               <Text style={styles.emptyTitle}>No Listings Yet</Text>
               <Text style={styles.emptyDescription}>
-                Start by adding your first equipment listing and watch your business grow
+                Start by adding your first equipment listing and watch your
+                business grow
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.emptyButton}
                 onPress={() => setShowOverlay(true)}
                 activeOpacity={0.8}
               >
                 <Icon name="plus" size={18} color="#ffffff" />
-                <Text style={styles.emptyButtonText}>Add Your First Listing</Text>
+                <Text style={styles.emptyButtonText}>
+                  Add Your First Listing
+                </Text>
               </TouchableOpacity>
             </Animated.View>
           ) : (
             listings.map((item, index) => {
               const statusColor = getStatusColor(item.status);
-              const conditionColor = getConditionColor(item.condition || item.item_condition);
-              const productType = Array.isArray(item.type) ? item.type[0] : item.type;
+              const conditionColor = getConditionColor(
+                item.condition || item.item_condition,
+              );
+              const productType = Array.isArray(item.type)
+                ? item.type[0]
+                : item.type;
 
               return (
                 <Animated.View
@@ -367,7 +407,7 @@ export default function MyListingsScreen({ navigation }) {
                     },
                   ]}
                 >
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.card}
                     onPress={() => handleViewDetails(item)}
                     activeOpacity={0.95}
@@ -375,12 +415,13 @@ export default function MyListingsScreen({ navigation }) {
                     <View style={styles.cardContent}>
                       {/* Enhanced Image Container */}
                       <View style={styles.imageContainer}>
-                        <Image 
-                          source={{ 
-                            uri: item.thumbnail || 
-                            'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400' 
-                          }} 
-                          style={styles.cardImage} 
+                        <Image
+                          source={{
+                            uri:
+                              item.thumbnail ||
+                              'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400',
+                          }}
+                          style={styles.cardImage}
                         />
                         <View style={styles.imageOverlay}>
                           <View style={styles.viewsBadge}>
@@ -389,7 +430,7 @@ export default function MyListingsScreen({ navigation }) {
                           </View>
                         </View>
                       </View>
-                      
+
                       <View style={styles.cardBody}>
                         <View style={styles.cardHeader}>
                           <View style={{ flex: 1 }}>
@@ -403,7 +444,12 @@ export default function MyListingsScreen({ navigation }) {
                                   { backgroundColor: statusColor.bg },
                                 ]}
                               >
-                                <View style={[styles.badgeDot, { backgroundColor: statusColor.text }]} />
+                                <View
+                                  style={[
+                                    styles.badgeDot,
+                                    { backgroundColor: statusColor.text },
+                                  ]}
+                                />
                                 <Text
                                   style={[
                                     styles.badgeText,
@@ -437,7 +483,11 @@ export default function MyListingsScreen({ navigation }) {
                             onPress={() => setActiveMenuId(item.ID)}
                             activeOpacity={0.7}
                           >
-                            <Icon name="more-vertical" size={18} color="#64748b" />
+                            <Icon
+                              name="more-vertical"
+                              size={18}
+                              color="#64748b"
+                            />
                           </TouchableOpacity>
                         </View>
                         <View style={styles.cardFooter}>
@@ -451,13 +501,17 @@ export default function MyListingsScreen({ navigation }) {
                             {item.price && (
                               <View style={styles.tag}>
                                 <Text style={styles.tagText}>
-                                  {item.price ? `${item.price}` : 'Price on request'}
+                                  {item.price
+                                    ? `${item.price}`
+                                    : 'Price on request'}
                                 </Text>
                               </View>
                             )}
                             {productType && (
                               <View style={styles.tag}>
-                                <Text style={styles.tagText}>{productType}</Text>
+                                <Text style={styles.tagText}>
+                                  {productType}
+                                </Text>
                               </View>
                             )}
                           </View>
@@ -471,9 +525,9 @@ export default function MyListingsScreen({ navigation }) {
           )}
         </View>
       </ScrollView>
-      
+
       <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />
-      
+
       {/* Enhanced Action Menu Modal */}
       <Modal
         isVisible={activeMenuId !== null}
@@ -485,50 +539,66 @@ export default function MyListingsScreen({ navigation }) {
       >
         <View style={styles.popoverMenu}>
           <View style={styles.menuHandle} />
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => currentListing && handleViewDetails(currentListing)}
             activeOpacity={0.7}
           >
-            <View style={[styles.menuIconContainer, { backgroundColor: '#dbeafe' }]}>
+            <View
+              style={[styles.menuIconContainer, { backgroundColor: '#dbeafe' }]}
+            >
               <Icon name="eye" size={18} color="#3b82f6" />
             </View>
             <View style={styles.menuTextContainer}>
               <Text style={styles.menuText}>View Details</Text>
-              <Text style={styles.menuSubtext}>See full listing information</Text>
+              <Text style={styles.menuSubtext}>
+                See full listing information
+              </Text>
             </View>
             <Icon name="chevron-right" size={16} color="#94a3b8" />
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => currentListing && handleEditListing(currentListing)}
             activeOpacity={0.7}
           >
-            <View style={[styles.menuIconContainer, { backgroundColor: '#fef3c7' }]}>
+            <View
+              style={[styles.menuIconContainer, { backgroundColor: '#fef3c7' }]}
+            >
               <Icon name="edit" size={18} color="#f59e0b" />
             </View>
             <View style={styles.menuTextContainer}>
               <Text style={styles.menuText}>Edit Listing</Text>
-              <Text style={styles.menuSubtext}>Modify your listing details</Text>
+              <Text style={styles.menuSubtext}>
+                Modify your listing details
+              </Text>
             </View>
             <Icon name="chevron-right" size={16} color="#94a3b8" />
           </TouchableOpacity>
-          
+
           <View style={styles.menuDivider} />
-          
+
           <TouchableOpacity
             style={[styles.menuItem, styles.dangerMenuItem]}
-            onPress={() => currentListing && handleDeleteListing(currentListing)}
+            onPress={() =>
+              currentListing && handleDeleteListing(currentListing)
+            }
             activeOpacity={0.7}
           >
-            <View style={[styles.menuIconContainer, { backgroundColor: '#fee2e2' }]}>
+            <View
+              style={[styles.menuIconContainer, { backgroundColor: '#fee2e2' }]}
+            >
               <Icon name="trash-2" size={18} color="#dc2626" />
             </View>
             <View style={styles.menuTextContainer}>
-              <Text style={[styles.menuText, { color: '#dc2626' }]}>Delete Listing</Text>
-              <Text style={styles.menuSubtext}>Permanently remove this listing</Text>
+              <Text style={[styles.menuText, { color: '#dc2626' }]}>
+                Delete Listing
+              </Text>
+              <Text style={styles.menuSubtext}>
+                Permanently remove this listing
+              </Text>
             </View>
             <Icon name="chevron-right" size={16} color="#dc2626" />
           </TouchableOpacity>
@@ -547,7 +617,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
+
   // Clean Loading Styles
   loadingContainer: {
     alignItems: 'center',
@@ -607,7 +677,7 @@ const styles = StyleSheet.create({
     color: '#4f46e5',
     fontWeight: '700',
   },
-  
+
   // Enhanced Add Button with Extracted Colors
   addButton: {
     flexDirection: 'row',

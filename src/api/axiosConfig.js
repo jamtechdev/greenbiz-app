@@ -9,7 +9,7 @@ export const setCustomAlertHandlers = handlers => {
 
 const apiClient = axios.create({
   baseURL: 'https://greenbidz.com/wp-json/greenbidz-api/v1',
-  timeout: 30000, // 30 seconds timeout
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -23,16 +23,18 @@ apiClient.interceptors.request.use(
         delete config.skipAuth;
         return config;
       }
-      
+
       const token = await AsyncStorage.getItem('userToken');
       const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
-      
+
       if (token && isLoggedIn === 'true') {
         config.headers.Authorization = `Bearer ${token}`;
       }
-      
+
       if (__DEV__) {
-        console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+        console.log(
+          `🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`,
+        );
         console.log('Headers:', config.headers);
         if (config.data && !(config.data instanceof FormData)) {
           console.log('Data:', config.data);
@@ -56,7 +58,11 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   response => {
     if (__DEV__) {
-      console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`);
+      console.log(
+        `✅ API Response: ${response.config.method?.toUpperCase()} ${
+          response.config.url
+        }`,
+      );
       console.log('Status:', response.status);
       console.log('Data:', response.data);
     }
@@ -64,9 +70,13 @@ apiClient.interceptors.response.use(
   },
   async error => {
     const originalRequest = error.config;
-    
+
     if (__DEV__) {
-      console.log(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
+      console.log(
+        `❌ API Error: ${error.config?.method?.toUpperCase()} ${
+          error.config?.url
+        }`,
+      );
       console.log('Error type:', error.code);
       console.log('Error message:', error.message);
       console.log('Status:', error.response?.status);
@@ -78,7 +88,8 @@ apiClient.interceptors.response.use(
       if (customAlertHandlers?.showError) {
         customAlertHandlers.showError({
           title: 'Connection Error',
-          message: 'Unable to connect to the server. Please check your internet connection and try again.',
+          message:
+            'Unable to connect to the server. Please check your internet connection and try again.',
         });
       }
       return Promise.reject(error);
@@ -132,13 +143,15 @@ apiClient.interceptors.response.use(
           if (customAlertHandlers?.showError) {
             customAlertHandlers.showError({
               title: 'Server Error',
-              message: 'Something went wrong on our end. Please try again later.',
+              message:
+                'Something went wrong on our end. Please try again later.',
             });
           }
           break;
 
         default:
-          const errorMessage = data?.message || `Request failed with status ${status}`;
+          const errorMessage =
+            data?.message || `Request failed with status ${status}`;
           if (customAlertHandlers?.showError) {
             customAlertHandlers.showError({
               title: 'Request Failed',
@@ -200,28 +213,28 @@ export const apiService = {
         ...config.headers,
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 120000, // Increased to 2 minutes for file uploads
+      timeout: 120000, // Increased to 2 minutes for file upload
     });
   },
 
   // Direct FormData POST method
-  saveProductDirect: async (formData) => {
+  saveProductDirect: async formData => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      
+
       const response = await axios.post(
         'https://greenbidz.com/wp-json/greenbidz-api/v1/submit-product',
         formData,
         {
           headers: {
             'Content-Type': 'multipart/form-data',
-            'Accept': 'application/json',
+            Accept: 'application/json',
             ...(token && { Authorization: `Bearer ${token}` }),
           },
           timeout: 120000,
-        }
+        },
       );
-      
+
       return response;
     } catch (error) {
       console.error('❌ Error in saveProductDirect:', error);
@@ -230,12 +243,12 @@ export const apiService = {
   },
 
   // Simplified saveProduct method for direct FormData POST
-  saveProduct: async (formData) => {
+  saveProduct: async formData => {
     try {
       console.log('📤 Posting FormData directly to submit-product endpoint...');
-      
+
       const token = await AsyncStorage.getItem('userToken');
-      
+
       const response = await apiClient.post('/submit-product', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -243,7 +256,7 @@ export const apiService = {
         },
         timeout: 120000, // 2 minutes for file uploads
       });
-      
+
       return response;
     } catch (error) {
       console.error('❌ Error in saveProduct:', error);
@@ -252,7 +265,12 @@ export const apiService = {
   },
 
   // Original submitProduct method
-  submitProduct: async (productData, images = [], documents = [], videos = []) => {
+  submitProduct: async (
+    productData,
+    images = [],
+    documents = [],
+    videos = [],
+  ) => {
     try {
       console.log('📝 Preparing product submission...');
       console.log('Product data:', productData);
@@ -261,15 +279,16 @@ export const apiService = {
       console.log('Videos count:', videos.length);
 
       const formData = new FormData();
-      
+
       // Append product data - ensure all values are strings
       Object.keys(productData).forEach(key => {
-        console.log(key, productData[key],"jiopppp")
+        console.log(key, productData[key], 'jiopppp');
         if (productData[key] !== null && productData[key] !== undefined) {
           // Convert objects/arrays to JSON strings
-          const value = typeof productData[key] === 'object' 
-            ? JSON.stringify(productData[key]) 
-            : String(productData[key]);
+          const value =
+            typeof productData[key] === 'object'
+              ? JSON.stringify(productData[key])
+              : String(productData[key]);
           formData.append(key, value);
         }
       });
@@ -279,9 +298,12 @@ export const apiService = {
         images.forEach((imageUri, idx) => {
           if (typeof imageUri === 'string') {
             // Handle URI strings
-            const fileExtension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-            const mimeType = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`;
-            
+            const fileExtension =
+              imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+            const mimeType = `image/${
+              fileExtension === 'jpg' ? 'jpeg' : fileExtension
+            }`;
+
             formData.append(`images[${idx}]`, {
               uri: imageUri,
               name: `image_${idx}.${fileExtension}`,
@@ -325,9 +347,8 @@ export const apiService = {
       }
 
       console.log('📤 Submitting product with FormData...');
-      
+
       return await apiService.uploadFiles('/submit-product', productData);
-      
     } catch (error) {
       console.error('❌ Error in submitProduct:', error);
       throw error;
@@ -339,52 +360,60 @@ export const apiService = {
     return axios.post(
       'https://greenbidz.com/wp-json/jwt-auth/v1/token',
       credentials,
-      { skipAuth: true }
+      { skipAuth: true },
     );
   },
-  
-  register: userData => apiService.post('/register', userData),
-  
+
+  register: userData => {
+    return apiClient.post('/register', userData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+},
+
   // User profile methods
-  updateProfile: profileData => apiService.post('/user-profile/update', profileData),
+  updateProfile: profileData =>
+    apiService.post('/user-profile/update', profileData),
   getUser: () => apiService.get('/user-profile'),
-  
+
   // Product methods
   getProducts: (params = {}) => apiService.get('/products', { params }),
   getProduct: id => apiService.get(`/products/${id}`),
   getAllListing: () => apiService.get('/my-products'),
-  
+
   // Image analysis
-  analyzeImage: imageData => apiService.post('/analize_process_images', imageData),
-  
-  // Category methods 
+  analyzeImage: imageData =>
+    apiService.post('/analize_process_images', imageData),
+
+  // Category methods
   getCategories: () => apiService.get('/categories'),
-  
-  getSubCategories: (parentId) => {
-    return apiService.get('/subcategories', { 
-      params: { parent_id: parentId } 
+
+  getSubCategories: parentId => {
+    return apiService.get('/subcategories', {
+      params: { parent_id: parentId },
     });
   },
-  
-  getCategoryIdByName: async (categoryName) => {
+
+  getCategoryIdByName: async categoryName => {
     try {
       const response = await apiService.get('/categories');
       const categories = response.data;
-      
-      const category = categories.find(cat => 
-        (cat.name || cat.label || cat.title || cat) === categoryName
+
+      const category = categories.find(
+        cat => (cat.name || cat.label || cat.title || cat) === categoryName,
       );
-      
+
       return category?.id || category?.term_id || null;
     } catch (error) {
       console.error('Error getting category ID:', error);
       return null;
     }
   },
-  
+
   // Location methods
   getLocations: () => apiService.get('/locations'),
-  
+
   // Auction methods
   getAuctionGroups: () => apiService.get('/auction-groups'),
 };

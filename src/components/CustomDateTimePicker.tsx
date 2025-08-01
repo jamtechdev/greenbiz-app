@@ -540,7 +540,8 @@ const styles = StyleSheet.create({
   },
 
   clearButton: {
-    padding: 4,
+    padding: 2,
+    
   },
 
   errorContainer: {

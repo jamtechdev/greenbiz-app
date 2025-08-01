@@ -1,7 +1,6 @@
-// store/slices/authSlice.js
+
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
 // Async thunk for login
 export const loginUser = createAsyncThunk(
   'auth/loginUser',

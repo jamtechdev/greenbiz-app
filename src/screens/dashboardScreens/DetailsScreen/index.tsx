@@ -23,6 +23,9 @@ import CustomAlert from '../../../components/CustomAlert';
 
 import { apiService } from '../../../api/axiosConfig';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
+import calculateMarketStats from '../../../utils/calculateMarketStats';
+import EnhancedMarketAnalysis from '../../../components/EnhancedMarketAnalysis';
+import { scaleFont, scaleHeight, scaleWidth } from '../../../utils/resposive';
 
 const { width, height } = Dimensions.get('window');
 
@@ -42,6 +45,15 @@ const COLORS = {
   error: '#ef4444',
   border: '#e2e8f0',
   light: '#f1f5f9',
+};
+
+// Font family constants for easy management
+const FONTS = {
+  regular: 'Poppins-Regular',
+  medium: 'Poppins-Medium',
+  semiBold: 'Poppins-SemiBold',
+  bold: 'Poppins-Bold',
+  light: 'Poppins-Light',
 };
 
 // Dropdown options
@@ -103,6 +115,7 @@ export default function DetailsScreen({ route, navigation }) {
   const getInitialFields = () => {
     if (analysisData && analysisData.success && analysisData.data) {
       const data = analysisData.data;
+      console.log(data, 'datatatatatata');
       const priceData = data.price || {};
 
       return {
@@ -158,6 +171,8 @@ export default function DetailsScreen({ route, navigation }) {
         sub_category: { value: '', editing: false },
         dimensions: { value: '', editing: false },
         co2_emission: { value: '', editing: false },
+        product_cat: { value: '', editing: false },
+        subcategory: { value: '', editing: false },
       };
     }
 
@@ -327,226 +342,223 @@ export default function DetailsScreen({ route, navigation }) {
       });
     }
   };
-const handleSubmitListing = async () => {
-  try {
-    // Ensure product_title is provided
-    if (!fields.name.value) {
-      Alert.alert('Validation Error', 'Product title is required');
-      setIsSubmitting(false);
-      return;
-    }
+  const handleSubmitListing = async () => {
+    try {
+      // Ensure product_title is provided
+      if (!fields.name.value) {
+        Alert.alert('Validation Error', 'Product title is required');
+        setIsSubmitting(false);
+        return;
+      }
 
-    console.log('🚀 Starting product submission...');
-    setIsSubmitting(true);
+      console.log('🚀 Starting product submission...');
+      setIsSubmitting(true);
 
-    // Process media files first
-    const documents = mediaFiles.filter(
-      file => file.category === 'documents' && file.type === 'application/pdf',
-    );
+      // Process media files first
+      const documents = mediaFiles.filter(
+        file =>
+          file.category === 'documents' && file.type === 'application/pdf',
+      );
 
-    const videos = mediaFiles.filter(
-      file => file.category === 'videos' && file.type === 'video/mp4',
-    );
+      console.log(selectedImages, 'selectedImagesselectedImagesselectedImages');
 
-    console.log(selectedImages, 'selectedImagesselectedImagesselectedImages');
+      // Create FormData object
+      const formData = new FormData();
 
-    // Create FormData object
-    const formData = new FormData();
+      // Add text fields to FormData
+      formData.append('product_title', fields.name.value || '');
+      formData.append('description', fields.equipment_description?.value || '');
+      formData.append('brand', fields.brand?.value || '');
+      formData.append('model', fields.model?.value || '');
+      formData.append(
+        'item_condition',
+        fields.condition?.value || 'New/Unused',
+      );
+      formData.append(
+        'operation_status',
+        fields.operation_status?.value || 'Running',
+      );
+      formData.append(
+        'manufacturing_year',
+        fields.year?.value || new Date().getFullYear().toString(),
+      );
+      formData.append('price', fields.original_price?.value || '0');
+      formData.append(
+        'product_type',
+        (fields.product_type?.value || 'Marketplace').toLowerCase(),
+      );
+      formData.append('currency', fields.currency?.value || 'USD');
 
-    // Add text fields to FormData
-    formData.append('product_title', fields.name.value || '');
-    formData.append('description', fields.equipment_description?.value || '');
-    formData.append('brand', fields.brand?.value || '');
-    formData.append('model', fields.model?.value || '');
-    formData.append('item_condition', fields.condition?.value || 'New/Unused');
-    formData.append(
-      'operation_status',
-      fields.operation_status?.value || 'Running',
-    );
-    formData.append(
-      'manufacturing_year',
-      fields.year?.value || new Date().getFullYear().toString(),
-    );
-    formData.append('price', fields.original_price?.value || '0');
-    formData.append(
-      'product_type',
-      (fields.product_type?.value || 'Marketplace').toLowerCase(),
-    );
-    formData.append('currency', fields.currency?.value || 'USD');
+      // Handle images - Use consistent field naming
+      if (selectedImages && selectedImages.length > 0) {
+        for (let index = 0; index < selectedImages.length; index++) {
+          const imageUri = selectedImages[index];
 
-    // Handle images - Use consistent field naming
-    if (selectedImages && selectedImages.length > 0) {
-      for (let index = 0; index < selectedImages.length; index++) {
-        const imageUri = selectedImages[index];
+          if (typeof imageUri === 'string') {
+            const fileExtension =
+              imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+            const fileName = `image_${index}.${fileExtension}`;
+            const mimeType = `image/${
+              fileExtension === 'jpg' ? 'jpeg' : fileExtension
+            }`;
 
-        if (typeof imageUri === 'string') {
-          const fileExtension =
-            imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-          const fileName = `image_${index}.${fileExtension}`;
-          const mimeType = `image/${
-            fileExtension === 'jpg' ? 'jpeg' : fileExtension
-          }`;
-
-          formData.append('images[]', {
-            uri: imageUri,
-            type: mimeType,
-            name: fileName,
-          });
-        } else if (imageUri && imageUri.uri) {
-          formData.append('images[]', {
-            uri: imageUri.uri,
-            type: imageUri.type || 'image/jpeg',
-            name: imageUri.name || `image_${index}.jpg`,
-          });
+            formData.append('images[]', {
+              uri: imageUri,
+              type: mimeType,
+              name: fileName,
+            });
+          } else if (imageUri && imageUri.uri) {
+            formData.append('images[]', {
+              uri: imageUri.uri,
+              type: imageUri.type || 'image/jpeg',
+              name: imageUri.name || `image_${index}.jpg`,
+            });
+          }
         }
       }
-    }
 
-    // Handle documents
-    documents.forEach((doc, index) => {
-      formData.append('documents[]', {
-        uri: doc.uri,
-        type: doc.type || 'application/pdf',
-        name: doc.name || `document_${index}.pdf`,
+      // Handle documents
+      documents.forEach((doc, index) => {
+        formData.append('documents[]', {
+          uri: doc.uri,
+          type: doc.type || 'application/pdf',
+          name: doc.name || `document_${index}.pdf`,
+        });
       });
-    });
 
-    // Handle videos
-    videos.forEach((video, index) => {
-      formData.append('videos[]', {
-        uri: video.uri,
-        type: video.type || 'video/mp4',
-        name: video.name || `video_${index}.mp4`,
-      });
-    });
-
-    // Add auction-specific fields if product type is auction
-    const productType = (
-      fields.product_type?.value || 'Marketplace'
-    ).toLowerCase();
-    if (productType === 'auction') {
-      formData.append(
-        '_yith_auction_for',
-        fields.auction_start_date?.value || '',
-      );
-      formData.append('_yith_auction_to', fields.auction_end_date?.value || '');
-      formData.append(
-        '_yith_auction_start_price',
-        fields.auction_start_price?.value || '0',
-      );
-      formData.append('auction_group', fields.auction_group?.value || '');
-      formData.append('reserve_price', fields.reserve_price?.value || '');
-      formData.append(
-        'auction_currency',
-        fields.auction_currency?.value || 'USD ($)',
-      );
-    }
-
-    // Add optional fields
-    if (fields.item_location?.value) {
-      formData.append('item_location', fields.item_location.value);
-    }
-    if (fields.sub_category?.value) {
-      formData.append('sub_category', fields.sub_category.value);
-    }
-    if (fields.parent_category?.value) {
-      formData.append('parent_category', fields.parent_category.value);
-    }
-    if (fields.dimensions?.value) {
-      formData.append('dimensions', fields.dimensions.value);
-    }
-    if (fields.co2_emission?.value) {
-      formData.append('co2_emission', fields.co2_emission.value);
-    }
-
-    // Add pricing analysis data if available
-    if (
-      fields.reselling_price_value?.value &&
-      Object.keys(fields.reselling_price_value.value).length > 0
-    ) {
-      formData.append(
-        'market_analysis',
-        JSON.stringify(fields.reselling_price_value.value),
-      );
-      formData.append(
-        'suggested_reselling_price',
-        fields.reselling_price?.value || '0',
-      );
-      formData.append(
-        'min_reselling_price',
-        fields.min_reselling_price?.value || '0',
-      );
-      formData.append(
-        'max_reselling_price',
-        fields.max_reselling_price?.value || '0',
-      );
-    }
-
-    // Debug: Log FormData contents (React Native specific)
-    console.log('📝 FormData contents:');
-    if (formData._parts) {
-      formData._parts.forEach(([key, value]) => {
-        console.log(
-          `${key}:`,
-          typeof value === 'object' && value.uri
-            ? `File: ${value.name}`
-            : value,
+      // Add auction-specific fields if product type is auction
+      const productType = (
+        fields.product_type?.value || 'Marketplace'
+      ).toLowerCase();
+      if (productType === 'auction') {
+        formData.append(
+          '_yith_auction_for',
+          fields.auction_start_date?.value || '',
         );
-      });
-    }
-    console.log(formData, 'formDataformDataformDataformData');
-
-    // Submit using the corrected saveProduct method
-    const response = await apiService.submitProduct(formData);
-
-    console.log('✅ Submission successful:', response.data);
-    setIsSubmitting(false);
-
-    if (response.data) {
-      showSuccess({
-        title: 'Success!',
-        message: 'Your equipment listing has been submitted successfully.',
-        buttonText: 'Continue',
-        onPress: () => navigation.navigate('Dashboard'),
-      });
-    }
-  } catch (error) {
-    console.error('❌ Submission error:', error);
-    setIsSubmitting(false);
-
-    let errorMessage =
-      'An error occurred while submitting your listing. Please try again.';
-
-    // Handle specific error types
-    if (error.message === 'Network Error' || error.code === 'NETWORK_ERROR') {
-      errorMessage =
-        'Network connection failed. Please check your internet connection and try again.';
-    } else if (error.response?.status === 422) {
-      const validationErrors = error.response.data?.errors;
-      if (validationErrors) {
-        const errorMessages = Object.values(validationErrors).flat();
-        errorMessage =
-          errorMessages.length > 0
-            ? errorMessages.join('\n')
-            : 'Please check your input data and try again.';
+        formData.append(
+          '_yith_auction_to',
+          fields.auction_end_date?.value || '',
+        );
+        formData.append(
+          '_yith_auction_start_price',
+          fields.auction_start_price?.value || '0',
+        );
+        formData.append('auction_group', fields.auction_group?.value || '');
+        formData.append(
+          '_yith_auction_reserve_price',
+          fields.reserve_price?.value || '',
+        );
+        formData.append(
+          'auction_currency',
+          fields.auction_currency?.value || 'USD ($)',
+        );
       }
-    } else if (error.response?.status === 413) {
-      errorMessage =
-        'Files are too large. Please reduce file sizes and try again.';
-    } else if (error.response?.status === 401) {
-      errorMessage = 'Authentication failed. Please log in again.';
-    } else if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
 
-    showError({
-      title: 'Submission Failed',
-      message: errorMessage,
-    });
-  }
-};
+      // Add optional fields
+      if (fields.item_location?.value) {
+        formData.append('item_location', fields.item_location.value);
+      }
+      if (fields.sub_category?.value) {
+        formData.append('subcategory', fields.sub_category.value);
+      }
+      if (fields.parent_category?.value) {
+        formData.append('category', fields.parent_category.value);
+      }
+      if (fields.dimensions?.value) {
+        formData.append('dimensions', fields.dimensions.value);
+      }
+      if (fields.co2_emission?.value) {
+        formData.append('co2_emission', fields.co2_emission.value);
+      }
+
+      // Add pricing analysis data if available
+      if (
+        fields.reselling_price_value?.value &&
+        Object.keys(fields.reselling_price_value.value).length > 0
+      ) {
+        formData.append(
+          'market_analysis',
+          JSON.stringify(fields.reselling_price_value.value),
+        );
+        formData.append(
+          'suggested_reselling_price',
+          fields.reselling_price?.value || '0',
+        );
+        formData.append(
+          'min_reselling_price',
+          fields.min_reselling_price?.value || '0',
+        );
+        formData.append(
+          'max_reselling_price',
+          fields.max_reselling_price?.value || '0',
+        );
+      }
+
+      // Debug: Log FormData contents (React Native specific)
+      console.log('📝 FormData contents:');
+      if (formData._parts) {
+        formData._parts.forEach(([key, value]) => {
+          console.log(
+            `${key}:`,
+            typeof value === 'object' && value.uri
+              ? `File: ${value.name}`
+              : value,
+          );
+        });
+      }
+      // console.log(formData, 'formDataformDataformDataformData');
+
+      // Submit using the corrected saveProduct method
+      const response = await apiService.submitProduct(formData);
+
+      // console.log('✅ Submission successful:', response.data);
+      setIsSubmitting(false);
+
+      if (response.data) {
+        showSuccess({
+          title: 'Success!',
+          message: 'Your equipment listing has been submitted successfully.',
+          buttonText: 'Continue',
+          onPress: () => navigation.navigate('Dashboard'),
+        });
+      }
+    } catch (error) {
+      console.error('❌ Submission error:', error);
+      setIsSubmitting(false);
+
+      let errorMessage =
+        'An error occurred while submitting your listing. Please try again.';
+
+      // Handle specific error types
+      if (error.message === 'Network Error' || error.code === 'NETWORK_ERROR') {
+        errorMessage =
+          'Network connection failed. Please check your internet connection and try again.';
+      } else if (error.response?.status === 422) {
+        const validationErrors = error.response.data?.errors;
+        if (validationErrors) {
+          const errorMessages = Object.values(validationErrors).flat();
+          errorMessage =
+            errorMessages.length > 0
+              ? errorMessages.join('\n')
+              : 'Please check your input data and try again.';
+        }
+      } else if (error.response?.status === 413) {
+        errorMessage =
+          'Files are too large. Please reduce file sizes and try again.';
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Authentication failed. Please log in again.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      showError({
+        title: 'Submission Failed',
+        message: errorMessage,
+      });
+    }
+  };
 
   const renderImageGallery = () => {
     if (selectedImages.length === 0) {
@@ -882,9 +894,6 @@ const handleSubmitListing = async () => {
 
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
-                {renderFieldInput('brand', 'Brand', 'bookmark')}
-              </View>
-              <View style={styles.fieldHalf}>
                 {renderFieldInput('model', 'Model', 'cpu')}
               </View>
             </View>
@@ -944,38 +953,16 @@ const handleSubmitListing = async () => {
                 )}
               </View>
               <View style={styles.fieldHalf}>
-                {renderPriceField(
-                  'original_price',
-                  'Original Price',
-                  'tag',
-                  false,
-                )}
+                {renderPriceField('original_price', 'Price', 'tag', false)}
               </View>
             </View>
-
             {/* Market Analysis */}
             {fields.reselling_price_value?.value &&
               Object.keys(fields.reselling_price_value.value).length > 0 && (
-                <View style={styles.marketAnalysis}>
-                  <View style={styles.marketHeader}>
-                    <Icon name="trending-up" size={16} color={COLORS.success} />
-                    <Text style={styles.marketTitle}>Market Analysis</Text>
-                  </View>
-
-                  {Object.entries(fields.reselling_price_value.value).map(
-                    ([platform, price]) => (
-                      <View key={platform} style={styles.marketRow}>
-                        <Text style={styles.marketPlatformText}>
-                          {platform}
-                        </Text>
-                        <Text style={styles.marketPrice}>
-                          {fields.currency?.value}{' '}
-                          {parseFloat(price).toLocaleString()}
-                        </Text>
-                      </View>
-                    ),
-                  )}
-                </View>
+                <EnhancedMarketAnalysis
+                  priceData={fields.reselling_price_value.value}
+                  currency={fields.currency?.value || 'USD'}
+                />
               )}
           </View>
         </Animated.View>
@@ -1068,39 +1055,40 @@ const styles = StyleSheet.create({
   // Header
   header: {
     backgroundColor: '#c0faf5',
-    // paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginVertical:4,
-    paddingVertical: 3,
-    gap: 16,
+    paddingHorizontal: scaleWidth(20),
+    marginVertical: scaleHeight(4),
+    paddingVertical: scaleHeight(3),
+    gap: scaleWidth(16),
   },
   backButton: {
-    padding: 8,
+    padding: scaleWidth(8),
   },
   headerText: {
     flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: scaleFont(20),
+    fontFamily: FONTS.semiBold,
     color: '#0d9488',
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.regular,
     color: '#0d9488',
-    marginTop: 2,
+    marginTop: scaleHeight(2),
   },
   authStatus: {
     alignItems: 'center',
   },
   authIndicator: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: scaleWidth(32),
+    height: scaleWidth(32),
+    borderRadius: scaleWidth(16),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1116,55 +1104,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: scaleHeight(100),
   },
 
   // Sections
   section: {
-    marginTop: 24,
-    paddingHorizontal: 20,
+    marginTop: scaleHeight(24),
+    paddingHorizontal: scaleWidth(20),
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: scaleFont(18),
+    fontFamily: FONTS.semiBold,
     color: COLORS.textPrimary,
-    marginBottom: 16,
+    marginBottom: scaleHeight(16),
   },
 
   // Cards
   card: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: scaleWidth(12),
+    padding: scaleWidth(20),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: scaleHeight(2) },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: scaleHeight(8),
+    elevation: scaleHeight(3),
     borderWidth: 1,
     borderColor: COLORS.border,
   },
 
   // Image Gallery
   imagePlaceholder: {
-    height: 200,
+    height: scaleHeight(200),
     backgroundColor: COLORS.light,
-    borderRadius: 12,
+    borderRadius: scaleWidth(12),
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    borderWidth: 2,
+    gap: scaleHeight(8),
+    borderWidth: scaleWidth(2),
     borderColor: COLORS.border,
     borderStyle: 'dashed',
   },
   placeholderText: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.regular,
     color: COLORS.textMuted,
-    marginTop: 8,
+    marginTop: scaleHeight(8),
   },
   singleImageContainer: {
-    height: 200,
-    borderRadius: 12,
+    height: scaleHeight(200),
+    borderRadius: scaleWidth(12),
     overflow: 'hidden',
   },
   singleImage: {
@@ -1173,12 +1162,12 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   imageGalleryContainer: {
-    gap: 12,
+    gap: scaleHeight(12),
   },
   mainImageContainer: {
     position: 'relative',
-    height: 200,
-    borderRadius: 12,
+    height: scaleHeight(200),
+    borderRadius: scaleWidth(12),
     overflow: 'hidden',
   },
   mainImage: {
@@ -1188,49 +1177,49 @@ const styles = StyleSheet.create({
   },
   imageCounter: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: scaleHeight(12),
+    right: scaleWidth(12),
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: scaleWidth(8),
+    paddingVertical: scaleHeight(4),
+    borderRadius: scaleWidth(8),
   },
   imageCounterText: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: scaleFont(12),
+    fontFamily: FONTS.medium,
   },
   navArrow: {
     position: 'absolute',
     top: '50%',
-    marginTop: -20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    marginTop: -scaleHeight(20),
+    width: scaleWidth(40),
+    height: scaleWidth(40),
+    borderRadius: scaleWidth(20),
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   prevArrow: {
-    left: 12,
+    left: scaleWidth(12),
   },
   nextArrow: {
-    right: 12,
+    right: scaleWidth(12),
   },
   thumbnailStrip: {
-    maxHeight: 70,
+    maxHeight: scaleHeight(70),
   },
   thumbnailContent: {
-    paddingHorizontal: 4,
-    gap: 8,
+    paddingHorizontal: scaleWidth(4),
+    gap: scaleWidth(8),
   },
   thumbnailItem: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: scaleWidth(60),
+    height: scaleWidth(60),
+    borderRadius: scaleWidth(8),
     overflow: 'hidden',
     position: 'relative',
-    borderWidth: 2,
+    borderWidth: scaleWidth(2),
     borderColor: 'transparent',
   },
   activeThumbnail: {
@@ -1254,29 +1243,29 @@ const styles = StyleSheet.create({
 
   // Fields
   fieldContainer: {
-    marginBottom: 20,
+    marginBottom: scaleHeight(20),
   },
   fieldHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: scaleWidth(8),
+    marginBottom: scaleHeight(8),
   },
   fieldLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.medium,
     color: COLORS.textPrimary,
   },
   readOnlyBadge: {
     backgroundColor: COLORS.light,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 8,
+    paddingHorizontal: scaleWidth(6),
+    paddingVertical: scaleHeight(2),
+    borderRadius: scaleWidth(4),
+    marginLeft: scaleWidth(8),
   },
   readOnlyText: {
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: scaleFont(10),
+    fontFamily: FONTS.medium,
     color: COLORS.textMuted,
     textTransform: 'uppercase',
   },
@@ -1288,44 +1277,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: COLORS.light,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: scaleHeight(12),
+    paddingHorizontal: scaleWidth(16),
+    borderRadius: scaleWidth(8),
     borderWidth: 1,
     borderColor: COLORS.border,
-    minHeight: 48,
+    minHeight: scaleHeight(48),
   },
   fieldText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.regular,
     color: COLORS.textPrimary,
-    fontWeight: '400',
   },
   fieldTextMultiline: {
-    minHeight: 60,
+    minHeight: scaleHeight(60),
     textAlignVertical: 'top',
   },
   fieldInput: {
     backgroundColor: COLORS.cardBackground,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    fontSize: 14,
+    paddingVertical: scaleHeight(12),
+    paddingHorizontal: scaleWidth(16),
+    borderRadius: scaleWidth(8),
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.regular,
     color: COLORS.textPrimary,
     borderWidth: 2,
     borderColor: COLORS.primary,
-    fontWeight: '400',
   },
   fieldInputEditing: {
     borderColor: COLORS.primary,
   },
   fieldInputMultiline: {
-    height: 80,
+    height: scaleHeight(80),
     textAlignVertical: 'top',
   },
   fieldRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: scaleWidth(12),
   },
   fieldHalf: {
     flex: 1,
@@ -1337,45 +1326,45 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: scaleWidth(20),
   },
   dropdownModal: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
+    borderRadius: scaleWidth(12),
     width: '100%',
-    maxWidth: 300,
-    maxHeight: 400,
+    maxWidth: scaleWidth(300),
+    maxHeight: scaleHeight(400),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: scaleHeight(10) },
     shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowRadius: scaleHeight(20),
+    elevation: scaleHeight(10),
   },
   dropdownHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: scaleHeight(16),
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   dropdownTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: scaleFont(16),
+    fontFamily: FONTS.semiBold,
     color: COLORS.textPrimary,
   },
   dropdownCloseButton: {
-    padding: 4,
+    padding: scaleHeight(4),
   },
   dropdownContent: {
-    maxHeight: 300,
+    maxHeight: scaleHeight(300),
   },
   dropdownOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: scaleHeight(12),
+    paddingHorizontal: scaleWidth(16),
     borderBottomWidth: 1,
     borderBottomColor: COLORS.light,
   },
@@ -1383,13 +1372,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.light,
   },
   dropdownOptionText: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.regular,
     color: COLORS.textPrimary,
-    fontWeight: '400',
   },
   dropdownOptionTextSelected: {
     color: COLORS.primary,
-    fontWeight: '500',
+    fontFamily: FONTS.medium,
   },
 
   // Price Fields
@@ -1400,35 +1389,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 8,
+    borderRadius: scaleWidth(8),
     borderWidth: 2,
     borderColor: COLORS.primary,
     overflow: 'hidden',
   },
   currencyPrefix: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(12),
     backgroundColor: COLORS.light,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.medium,
     color: COLORS.textSecondary,
   },
   priceInput: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    fontSize: 14,
+    paddingVertical: scaleHeight(12),
+    paddingHorizontal: scaleWidth(12),
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.medium,
     color: COLORS.textPrimary,
-    fontWeight: '500',
   },
   priceDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: COLORS.light,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: scaleHeight(12),
+    paddingHorizontal: scaleWidth(16),
+    borderRadius: scaleWidth(8),
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -1438,102 +1427,98 @@ const styles = StyleSheet.create({
   },
   priceText: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: scaleFont(15),
+    fontFamily: FONTS.semiBold,
   },
 
   // Market Analysis
   marketAnalysis: {
-    marginTop: 16,
+    marginTop: scaleHeight(16),
     backgroundColor: COLORS.light,
-    borderRadius: 8,
-    padding: 16,
+    borderRadius: scaleWidth(8),
+    padding: scaleWidth(16),
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  marketHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
+
   marketTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: scaleFont(15),
+    fontFamily: FONTS.semiBold,
     color: COLORS.success,
   },
   marketRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: scaleHeight(8),
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   marketPlatformText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.medium,
     color: COLORS.textSecondary,
     textTransform: 'capitalize',
   },
   marketPrice: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.semiBold,
     color: COLORS.success,
   },
 
   // Auth Card
   authCard: {
     backgroundColor: COLORS.cardBackground,
-    marginHorizontal: 20,
-    marginTop: 24,
-    borderRadius: 12,
-    padding: 20,
+    marginHorizontal: scaleWidth(20),
+    marginTop: scaleHeight(24),
+    borderRadius: scaleWidth(12),
+    padding: scaleWidth(20),
     borderLeftWidth: 4,
     borderLeftColor: COLORS.warning,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: scaleHeight(2) },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: scaleHeight(8),
+    elevation: scaleHeight(3),
   },
   authCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: scaleWidth(16),
   },
   authCardText: {
     flex: 1,
   },
   authCardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: scaleFont(16),
+    fontFamily: FONTS.semiBold,
     color: COLORS.textPrimary,
-    marginBottom: 4,
+    marginBottom: scaleHeight(4),
   },
   authCardDescription: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.regular,
     color: COLORS.textSecondary,
   },
 
   // Submit Button
   submitContainer: {
-    marginHorizontal: 20,
-    marginTop: 32,
+    marginHorizontal: scaleWidth(20),
+    marginTop: scaleHeight(32),
   },
   submitButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
+    paddingVertical: scaleHeight(16),
+    borderRadius: scaleWidth(12),
+    gap: scaleWidth(8),
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: scaleHeight(4) },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: scaleHeight(8),
+    elevation: scaleHeight(6),
   },
   submitButtonDisabled: {
     backgroundColor: COLORS.textMuted,
@@ -1541,11 +1526,67 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   submitText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: scaleFont(16),
+    fontFamily: FONTS.semiBold,
     color: '#fff',
   },
   bottomSpacing: {
-    height: 32,
+    height: scaleHeight(32),
+  },
+
+  marketHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleWidth(8),
+    marginBottom: scaleHeight(16),
+  },
+
+  marketStatsContainer: {
+    gap: scaleHeight(12),
+  },
+  marketStatRow: {
+    flexDirection: 'row',
+    gap: scaleWidth(12),
+  },
+  marketStatItem: {
+    flex: 1,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: scaleWidth(8),
+    padding: scaleHeight(12),
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  marketStatLabel: {
+    fontSize: scaleFont(12),
+    fontFamily: FONTS.medium,
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    marginBottom: scaleHeight(4),
+  },
+  marketStatValue: {
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.bold,
+    textAlign: 'center',
+  },
+  marketInfoRow: {
+    alignItems: 'center',
+    marginTop: scaleHeight(8),
+    paddingTop: scaleHeight(12),
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  marketInfoText: {
+    fontSize: scaleFont(12),
+    fontFamily: FONTS.regular,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
+  noDataText: {
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.regular,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

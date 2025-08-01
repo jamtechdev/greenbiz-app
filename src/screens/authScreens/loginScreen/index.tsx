@@ -244,10 +244,7 @@ const LoginScreen = ({ navigation, route }) => {
   };
 
   const handleSignUp = () => {
-    showError({
-      title: 'Coming Soon',
-      message: 'Sign Up will be available soon!',
-    });
+    navigation.navigate('Signup');
   };
 
   const handleForgotPassword = () => {

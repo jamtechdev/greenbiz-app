@@ -199,16 +199,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1f2937',
     fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
     flex: 1,
   },
   dropdownPlaceholder: {
     color: '#9ca3af',
     fontWeight: '400',
+    fontFamily: 'Poppins-Regular',
   },
   dropdownTextLoading: {
     fontSize: 14,
     color: '#6b7280',
     fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
     flex: 1,
   },
 
@@ -244,6 +247,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
     color: '#1f2937',
   },
   closeButton: {
@@ -266,6 +270,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9ca3af',
     fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
   },
   optionItem: {
     flexDirection: 'row',
@@ -286,11 +291,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
     flex: 1,
   },
   optionTextSelected: {
     color: '#6366f1',
     fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
+    
   },
 });
 

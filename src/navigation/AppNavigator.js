@@ -9,6 +9,7 @@ import MyListingsScreen from '../screens/dashboardScreens/MyListingsScreen';
 import ProfileScreen from '../screens/dashboardScreens/ProfileScreen';
 import DetailsScreen from '../screens/dashboardScreens/DetailsScreen';
 import { checkAuthStatus } from '../store/slices/authSlice';
+import SignupFlow from '../screens/authScreens/register';
 
 const Stack = createStackNavigator();
 
@@ -37,6 +38,14 @@ const LoginStack = () => {
       <Stack.Screen 
         name="Login" 
         component={LoginScreen}
+        options={{
+          presentation: 'modal', // Makes login feel like a modal
+          gestureEnabled: true,
+        }}
+      />
+      <Stack.Screen 
+        name="Signup" 
+        component={SignupFlow}
         options={{
           presentation: 'modal', // Makes login feel like a modal
           gestureEnabled: true,

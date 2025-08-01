@@ -10,7 +10,6 @@ import {
   StatusBar,
   Platform,
   ActivityIndicator,
-  Animated,
   Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,18 +20,14 @@ import { useAppContext } from '../../../_customContext/AppProvider';
 import { apiService } from '../../../api/axiosConfig';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
 import CustomAlert from '../../../components/CustomAlert';
+import { scaleWidth, scaleHeight, scaleFont } from '../../../utils/resposive';
 
 const { width, height } = Dimensions.get('window');
 
 export default function ProfileScreen({ navigation }) {
   const { showOverlay, setShowOverlay } = useAppContext();
-  const {
-    alertConfig,
-    hideAlert,
-    showSuccess,
-    showError,
-    showConfirm,
-  } = useCustomAlert();
+  const { alertConfig, hideAlert, showSuccess, showError, showConfirm } =
+    useCustomAlert();
 
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -51,29 +46,10 @@ export default function ProfileScreen({ navigation }) {
   });
   const [originalForm, setOriginalForm] = useState({});
 
-  // Animation values
-  const fadeAnim = useState(new Animated.Value(0))[0];
-  const slideAnim = useState(new Animated.Value(30))[0];
-
   useEffect(() => {
     fetchUserProfile();
-
-    // Start animations
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
   }, []);
 
-  // Refresh data when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       if (!editing) {
@@ -109,12 +85,11 @@ export default function ProfileScreen({ navigation }) {
         setOriginalForm(formData);
         console.log('✅ Profile fetched successfully');
       } else {
-         navigation.navigate('Login');
+        navigation.navigate('Login');
         showError({
           title: 'Failed to Load Profile',
           message: 'Unable to fetch your profile data.',
         });
-       
       }
     } catch (error) {
       console.error('❌ Error fetching profile:', error);
@@ -122,7 +97,6 @@ export default function ProfileScreen({ navigation }) {
         title: 'Profile Load Error',
         message: 'Failed to load your profile. Please try again.',
       });
-      navigation
     } finally {
       setLoading(false);
     }
@@ -140,7 +114,6 @@ export default function ProfileScreen({ navigation }) {
       setSaving(true);
       console.log('💾 Saving profile changes...');
 
-      // Create update payload
       const updateData = {
         first_name: form.first_name,
         last_name: form.last_name,
@@ -153,7 +126,6 @@ export default function ProfileScreen({ navigation }) {
         user_type: form.user_type,
       };
 
-      // Call update profile API
       const response = await apiService.updateProfile(updateData);
 
       if (response.data && response.data.success) {
@@ -192,7 +164,6 @@ export default function ProfileScreen({ navigation }) {
         try {
           console.log('🚪 Logging out...');
 
-          // Clear AsyncStorage
           await AsyncStorage.multiRemove([
             'userToken',
             'isLoggedIn',
@@ -200,7 +171,6 @@ export default function ProfileScreen({ navigation }) {
             'shouldShowReviewModal',
           ]);
 
-          // Navigate to login screen
           navigation.reset({
             index: 0,
             routes: [{ name: 'Login' }],
@@ -230,88 +200,80 @@ export default function ProfileScreen({ navigation }) {
     return `${firstName} ${lastName}`.trim() || 'User';
   };
 
-  const getBadgeColor = () => {
-    switch (form.business_type?.toLowerCase()) {
-      case 'manufacturer':
-        return { bg: '#dbeafe', text: '#3b82f6' };
-      case 'dealer':
-        return { bg: '#dcfce7', text: '#16a34a' };
-      case 'contractor':
-        return { bg: '#fef3c7', text: '#d97706' };
-      default:
-        return { bg: '#f1f5f9', text: '#64748b' };
-    }
-  };
-
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#6366f1" />
-        <Text style={styles.loadingText}>Loading your profile...</Text>
+      <View style={[styles.container, styles.loadingContainer]}>
+        <View style={styles.loadingContent}>
+          <ActivityIndicator size="large" color="#667eea" />
+          <Text style={styles.loadingText}>Loading your profile...</Text>
+        </View>
       </View>
     );
   }
 
-  const badgeColor = getBadgeColor();
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#6366f1" />
+      <StatusBar barStyle="light-content" backgroundColor="#00c0a2" />
 
-      {/* Clean Fixed Header */}
+      {/* Beautiful Header */}
       <View style={styles.headerContainer}>
-        <View style={styles.header}>
+        <View style={styles.headerGradient}>
           <SafeAreaView>
-            <Animated.View
-              style={[
-                styles.headerContent,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
-                },
-              ]}
-            >
-              <View style={styles.headerLeft}>
-                <Text style={styles.headerTitle}>Profile</Text>
-                <Text style={styles.headerSubtitle}>
-                  {editing ? 'Edit your information' : 'Manage your account'}
-                </Text>
-              </View>
-
-              {editing ? (
-                <View style={styles.editButtons}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerTop}>
+                <View style={styles.headerLeft}>
                   <TouchableOpacity
-                    style={styles.cancelBtn}
-                    onPress={onCancel}
-                    disabled={saving}
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
                   >
-                    <Text style={styles.cancelText}>Cancel</Text>
+                    <Icon name="arrow-left" size={20} color="#fff" />
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
-                    onPress={onSave}
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Icon name="check" size={16} color="#fff" />
-                    )}
-                    <Text style={styles.saveText}>
-                      {saving ? 'Saving...' : 'Save'}
+                  <View style={styles.headerTextContainer}>
+                    <Text style={styles.headerTitle}>My Profile</Text>
+                    <Text style={styles.headerSubtitle}>
+                      {editing ? 'Edit your details' : 'Manage your account'}
                     </Text>
-                  </TouchableOpacity>
+                  </View>
                 </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.editBtn}
-                  onPress={() => setEditing(true)}
-                >
-                  <Icon name="edit-2" size={16} color="#fff" />
-                  <Text style={styles.editBtnText}>Edit</Text>
-                </TouchableOpacity>
-              )}
-            </Animated.View>
+
+                {editing ? (
+                  <View style={styles.editActions}>
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={onCancel}
+                      disabled={saving}
+                    >
+                      <Text style={styles.cancelButtonText}>X</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.saveButton,
+                        saving && styles.saveButtonDisabled,
+                      ]}
+                      onPress={onSave}
+                      disabled={saving}
+                    >
+                      {saving ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Icon name="check" size={16} color="#fff" />
+                      )}
+                      <Text style={styles.saveButtonText}>
+                        {saving ? 'Saving...' : 'Save'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => setEditing(true)}
+                  >
+                    <Icon name="edit-3" size={16} color="#fff" />
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           </SafeAreaView>
         </View>
       </View>
@@ -321,198 +283,129 @@ export default function ProfileScreen({ navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Clean Avatar Section */}
-        <Animated.View
-          style={[
-            styles.avatarSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>{getInitials()}</Text>
+        {/* Profile Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarSection}>
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{getInitials()}</Text>
+              </View>
+              {editing && (
+                <TouchableOpacity style={styles.avatarEditButton}>
+                  <Icon name="camera" size={12} color="#fff" />
+                </TouchableOpacity>
+              )}
             </View>
-            {editing && (
-              <TouchableOpacity style={styles.avatarEditBtn}>
-                <Icon name="camera" size={14} color="#fff" />
-              </TouchableOpacity>
-            )}
+
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>{getFullName()}</Text>
+              <Text style={styles.userEmail}>{form.email}</Text>
+              {form.business_type && (
+                <View style={styles.businessTypeBadge}>
+                  <Text style={styles.businessTypeText}>
+                    {form.business_type}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {/* Form Sections */}
+        <View style={styles.formsContainer}>
+          {/* Personal Information */}
+          <View style={styles.formSection}>
+            <Text style={styles.sectionTitle}>Personal Information</Text>
+            <View style={styles.formGrid}>
+              {renderFormField(
+                'First Name',
+                'first_name',
+                form.first_name,
+                editing,
+                onChange,
+              )}
+              {renderFormField(
+                'Last Name',
+                'last_name',
+                form.last_name,
+                editing,
+                onChange,
+              )}
+              {renderFormField(
+                'Username',
+                'username',
+                form.username,
+                editing,
+                onChange,
+              )}
+              {renderFormField(
+                'Email Address',
+                'email',
+                form.email,
+                editing,
+                onChange,
+                'email-address',
+              )}
+            </View>
           </View>
 
-          <Text style={styles.profileName}>{getFullName()}</Text>
-          <Text style={styles.profileUsername}>@{form.username}</Text>
-
-          {form.business_type && (
-            <View
-              style={[styles.businessBadge, { backgroundColor: badgeColor.bg }]}
-            >
-              <Text
-                style={[styles.businessBadgeText, { color: badgeColor.text }]}
-              >
-                {form.business_type}
-              </Text>
-            </View>
-          )}
-        </Animated.View>
-
-        {/* Simple Form Cards */}
-        <View style={styles.formContainer}>
-          {/* Personal Info */}
-          <Animated.View
-            style={[
-              styles.card,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
-            ]}
-          >
-            <Text style={styles.sectionTitle}>Personal Information</Text>
-            {renderField(
-              'First Name',
-              'first_name',
-              form.first_name,
-              editing,
-              onChange,
-            )}
-            {renderField(
-              'Last Name',
-              'last_name',
-              form.last_name,
-              editing,
-              onChange,
-            )}
-            {renderField(
-              'Username',
-              'username',
-              form.username,
-              editing,
-              onChange,
-            )}
-            {renderField(
-              'Email',
-              'email',
-              form.email,
-              editing,
-              onChange,
-              'email-address',
-            )}
-          </Animated.View>
-
-          {/* Business Info */}
-          <Animated.View
-            style={[
-              styles.card,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
-            ]}
-          >
+          {/* Business Information */}
+          <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Business Information</Text>
-            {renderField(
-              'Phone Number',
-              'billing_phone',
-              form.billing_phone,
-              editing,
-              onChange,
-              'phone-pad',
-            )}
-            {renderField(
-              'Country',
-              'billing_country',
-              form.billing_country,
-              editing,
-              onChange,
-            )}
-            {renderField('Company', 'company', form.company, editing, onChange)}
-            {renderField('Role', 'role', form.role, false, onChange)}{' '}
-            {/* Read-only */}
-          </Animated.View>
+            <View style={styles.formGrid}>
+              {renderFormField(
+                'Phone Number',
+                'billing_phone',
+                form.billing_phone,
+                editing,
+                onChange,
+                'phone-pad',
+              )}
+              {renderFormField(
+                'Country',
+                'billing_country',
+                form.billing_country,
+                editing,
+                onChange,
+              )}
+              {renderFormField(
+                'Company',
+                'company',
+                form.company,
+                editing,
+                onChange,
+              )}
+              {renderFormField('Role', 'role', form.role, false, onChange)}
+            </View>
+          </View>
 
-          {/* Account Actions */}
-          <Animated.View
-            style={[
-              styles.card,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
-            ]}
-          >
+          {/* Quick Actions */}
+          <View style={styles.actionsSection}>
             <Text style={styles.sectionTitle}>Account Settings</Text>
-
-            <TouchableOpacity style={styles.actionItem}>
-              <View style={styles.actionLeft}>
-                <View
-                  style={[styles.actionIcon, { backgroundColor: '#e0e7ff' }]}
-                >
-                  <Icon name="key" size={18} color="#6366f1" />
-                </View>
-                <Text style={styles.actionText}>Change Password</Text>
-              </View>
-              <Icon name="chevron-right" size={18} color="#94a3b8" />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionItem}>
-              <View style={styles.actionLeft}>
-                <View
-                  style={[styles.actionIcon, { backgroundColor: '#dcfce7' }]}
-                >
-                  <Icon name="shield" size={18} color="#16a34a" />
-                </View>
-                <Text style={styles.actionText}>Privacy Settings</Text>
-              </View>
-              <Icon name="chevron-right" size={18} color="#94a3b8" />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionItem}>
-              <View style={styles.actionLeft}>
-                <View
-                  style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}
-                >
-                  <Icon name="bell" size={18} color="#d97706" />
-                </View>
-                <Text style={styles.actionText}>Notifications</Text>
-              </View>
-              <Icon name="chevron-right" size={18} color="#94a3b8" />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionItem}>
-              <View style={styles.actionLeft}>
-                <View
-                  style={[styles.actionIcon, { backgroundColor: '#f3e8ff' }]}
-                >
-                  <Icon name="help-circle" size={18} color="#8b5cf6" />
-                </View>
-                <Text style={styles.actionText}>Help & Support</Text>
-              </View>
-              <Icon name="chevron-right" size={18} color="#94a3b8" />
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
+            <View style={styles.actionsList}>
+              {/* {renderActionItem(
+                'Help Circle',
+                'Help & Support',
+                'Get help and contact support',
+                '#f59e0b',
+                '#fef3c7',
+              )} */}
+            </View>
 
             <TouchableOpacity
-              style={[styles.actionItem, styles.logoutAction]}
+              style={styles.logoutButton}
               onPress={handleLogout}
             >
-              <View style={styles.actionLeft}>
-                <View
-                  style={[styles.actionIcon, { backgroundColor: '#fee2e2' }]}
-                >
-                  <Icon name="log-out" size={18} color="#dc2626" />
-                </View>
-                <Text style={[styles.actionText, styles.logoutText]}>
-                  Logout
-                </Text>
+              <View style={styles.logoutIcon}>
+                <Icon name="log-out" size={18} color="#ef4444" />
               </View>
+              <Text style={styles.logoutText}>Sign Out</Text>
+              <Icon name="chevron-right" size={16} color="#ef4444" />
             </TouchableOpacity>
-          </Animated.View>
+          </View>
         </View>
       </ScrollView>
+
       <CustomAlert
         visible={alertConfig.visible}
         title={alertConfig.title}
@@ -529,7 +422,7 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
-const renderField = (
+const renderFormField = (
   label,
   key,
   value,
@@ -549,11 +442,28 @@ const renderField = (
         placeholderTextColor="#9ca3af"
       />
     ) : (
-      <View style={styles.fieldValue}>
-        <Text style={styles.fieldText}>{value || 'Not provided'}</Text>
+      <View style={styles.fieldDisplay}>
+        <Text style={styles.fieldValue}>{value || 'Not provided'}</Text>
       </View>
     )}
   </View>
+);
+
+const renderActionItem = (iconName, title, subtitle, iconColor, bgColor) => (
+  <TouchableOpacity style={styles.actionItem} key={title}>
+    <View style={[styles.actionIcon, { backgroundColor: bgColor }]}>
+      <Icon
+        name={iconName.toLowerCase().replace(' ', '-')}
+        size={20}
+        color={iconColor}
+      />
+    </View>
+    <View style={styles.actionContent}>
+      <Text style={styles.actionTitle}>{title}</Text>
+      <Text style={styles.actionSubtitle}>{subtitle}</Text>
+    </View>
+    <Icon name="chevron-right" size={16} color="#9ca3af" />
+  </TouchableOpacity>
 );
 
 const styles = StyleSheet.create({
@@ -561,100 +471,120 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  centered: {
+
+  // Loading
+  loadingContainer: {
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContent: {
     alignItems: 'center',
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 16,
+    fontSize: scaleFont(16),
     color: '#6b7280',
-    fontWeight: '500',
+    fontFamily: 'Poppins-Medium',
   },
 
-  // Clean Header
+  // Beautiful Header
   headerContainer: {
     position: 'relative',
     zIndex: 1000,
   },
-  header: {
-    backgroundColor: '#6366f1',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 0,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+  headerGradient: {
+    backgroundColor: '#00c0a2',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingBottom: scaleHeight(20),
   },
   headerContent: {
+    paddingHorizontal: scaleWidth(20),
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 10 : 0,
+    paddingTop: scaleHeight(10),
   },
   headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  backButton: {
+    width: scaleWidth(40),
+    height: scaleWidth(40),
+    borderRadius: scaleWidth(20),
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: scaleWidth(16),
+  },
+  headerTextContainer: {
     flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
-    color: '#fff',
+    fontSize: scaleFont(24),
     fontWeight: '700',
-    marginBottom: 4,
+    color: '#fff',
+    fontFamily: 'Poppins-Bold',
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
+    marginTop: scaleHeight(2),
   },
 
-  // Header Buttons
-  editBtn: {
+  // Header Actions
+  editButton: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
     alignItems: 'center',
-    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: scaleHeight(10),
+    paddingHorizontal: scaleWidth(16),
+    borderRadius: scaleWidth(25),
+    gap: scaleWidth(6),
   },
-  editBtnText: {
+  editButtonText: {
     color: '#fff',
+    fontSize: scaleFont(14),
     fontWeight: '600',
-    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
   },
-  editButtons: {
+  editActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: scaleWidth(8),
   },
-  cancelBtn: {
+  cancelButton: {
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingVertical: scaleHeight(10),
+    paddingHorizontal: scaleWidth(16),
+    borderRadius: scaleWidth(25),
   },
-  saveBtn: {
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: scaleFont(14),
+    fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
+  },
+  saveButton: {
     flexDirection: 'row',
-    backgroundColor: '#10b981',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
     alignItems: 'center',
-    gap: 6,
+    backgroundColor: '#10b981',
+    paddingVertical: scaleHeight(10),
+    paddingHorizontal: scaleWidth(16),
+    borderRadius: scaleWidth(25),
+    gap: scaleWidth(6),
   },
-  saveBtnDisabled: {
+  saveButtonDisabled: {
     backgroundColor: '#9ca3af',
   },
-  cancelText: {
+  saveButtonText: {
     color: '#fff',
+    fontSize: scaleFont(14),
     fontWeight: '600',
-    fontSize: 14,
-  },
-  saveText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
   },
 
   // Scroll View
@@ -662,183 +592,229 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: scaleHeight(120),
   },
 
-  // Clean Avatar Section
-  avatarSection: {
-    alignItems: 'center',
-    paddingVertical: 30,
-    paddingHorizontal: 20,
+  // Profile Card
+  profileCard: {
     backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 16,
+    marginHorizontal: scaleWidth(20),
+    marginTop: scaleHeight(10),
+    borderRadius: scaleWidth(20),
+    padding: scaleWidth(24),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOffset: { width: 0, height: scaleHeight(4) },
+    shadowOpacity: 0.1,
+    shadowRadius: scaleHeight(12),
+    elevation: scaleHeight(8),
+  },
+  avatarSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: 16,
+    marginRight: scaleWidth(20),
   },
-  avatarCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
+  avatar: {
+    width: scaleWidth(80),
+    height: scaleWidth(80),
+    borderRadius: scaleWidth(40),
+    backgroundColor: '#667eea',
     alignItems: 'center',
-    shadowColor: '#6366f1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  avatarInitials: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  avatarEditBtn: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#10b981',
-    padding: 8,
-    borderRadius: 16,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 2 },
+    justifyContent: 'center',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: scaleHeight(4) },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowRadius: scaleHeight(8),
+    elevation: scaleHeight(6),
   },
-  profileName: {
-    fontSize: 20,
+  avatarText: {
+    fontSize: scaleFont(28),
     fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 4,
-    textAlign: 'center',
+    color: '#fff',
+    fontFamily: 'Poppins-Bold',
   },
-  profileUsername: {
-    fontSize: 14,
+  avatarEditButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: scaleWidth(24),
+    height: scaleWidth(24),
+    borderRadius: scaleWidth(12),
+    backgroundColor: '#10b981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: scaleWidth(2),
+    borderColor: '#fff',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: scaleFont(20),
+    fontWeight: '700',
+    color: '#111827',
+    fontFamily: 'Poppins-Bold',
+    marginBottom: scaleHeight(4),
+  },
+  userEmail: {
+    fontSize: scaleFont(14),
     color: '#6b7280',
-    fontWeight: '500',
-    marginBottom: 12,
-    textAlign: 'center',
+    fontFamily: 'Poppins-Regular',
+    marginBottom: scaleHeight(8),
   },
-  businessBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginTop: 8,
+  businessTypeBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#f0f0ff',
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(6),
+    borderRadius: scaleWidth(12),
   },
-  businessBadgeText: {
-    fontSize: 12,
+  businessTypeText: {
+    fontSize: scaleFont(12),
     fontWeight: '600',
+    color: '#667eea',
+    fontFamily: 'Poppins-SemiBold',
     textTransform: 'capitalize',
   },
 
-  // Form Container
-  formContainer: {
-    paddingHorizontal: 16,
+  // Forms Container
+  formsContainer: {
+    paddingHorizontal: scaleWidth(20),
+    paddingTop: scaleHeight(20),
   },
-
-  // Clean Cards
-  card: {
+  formSection: {
     backgroundColor: '#fff',
-    marginBottom: 16,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: scaleWidth(16),
+    padding: scaleWidth(20),
+    marginBottom: scaleHeight(16),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOffset: { width: 0, height: scaleHeight(2) },
+    shadowOpacity: 0.05,
+    shadowRadius: scaleHeight(8),
+    elevation: scaleHeight(3),
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: scaleFont(18),
     fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 16,
+    color: '#111827',
+    fontFamily: 'Poppins-Bold',
+    marginBottom: scaleHeight(20),
+  },
+  formGrid: {
+    gap: scaleHeight(16),
   },
 
-  // Clean Fields
+  // Form Fields
   fieldContainer: {
-    marginBottom: 16,
+    marginBottom: scaleHeight(4),
   },
   fieldLabel: {
-    fontSize: 13,
-    marginBottom: 6,
-    color: '#6b7280',
+    fontSize: scaleFont(13),
     fontWeight: '600',
-  },
-  fieldValue: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  fieldText: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    color: '#1f2937',
-    fontSize: 14,
-    fontWeight: '500',
+    color: '#374151',
+    fontFamily: 'Poppins-SemiBold',
+    marginBottom: scaleHeight(8),
   },
   fieldInput: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    fontSize: 14,
-    color: '#1f2937',
-    fontWeight: '500',
+    borderColor: '#e5e7eb',
+    borderRadius: scaleWidth(12),
+    paddingVertical: scaleHeight(14),
+    paddingHorizontal: scaleWidth(16),
+    fontSize: scaleFont(16),
+    color: '#111827',
+    fontFamily: 'Poppins-Regular',
+    minHeight: scaleHeight(50),
+  },
+  fieldDisplay: {
+    backgroundColor: '#f9fafb',
+    borderRadius: scaleWidth(12),
+    paddingVertical: scaleHeight(14),
+    paddingHorizontal: scaleWidth(16),
+    minHeight: scaleHeight(50),
+    justifyContent: 'center',
+  },
+  fieldValue: {
+    fontSize: scaleFont(16),
+    color: '#111827',
+    fontFamily: 'Poppins-Regular',
   },
 
-  // Clean Action Items
+  // Actions Section
+  actionsSection: {
+    backgroundColor: '#fff',
+    borderRadius: scaleWidth(16),
+    padding: scaleWidth(20),
+    marginBottom: scaleHeight(16),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: scaleHeight(2) },
+    shadowOpacity: 0.05,
+    shadowRadius: scaleHeight(8),
+    elevation: scaleHeight(3),
+  },
+  actionsList: {
+    gap: scaleHeight(4),
+    marginBottom: scaleHeight(16),
+  },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: scaleHeight(16),
+    paddingHorizontal: scaleWidth(4),
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  actionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    borderBottomColor: '#f3f4f6',
   },
   actionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: scaleWidth(44),
+    height: scaleWidth(44),
+    borderRadius: scaleWidth(22),
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: scaleWidth(16),
   },
-  actionText: {
-    fontSize: 15,
-    color: '#374151',
-    fontWeight: '500',
+  actionContent: {
     flex: 1,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#e5e7eb',
-    marginVertical: 8,
+  actionTitle: {
+    fontSize: scaleFont(16),
+    fontWeight: '600',
+    color: '#111827',
+    fontFamily: 'Poppins-SemiBold',
+    marginBottom: scaleHeight(2),
   },
-  logoutAction: {
-    borderBottomWidth: 0,
-    marginTop: 4,
+  actionSubtitle: {
+    fontSize: scaleFont(13),
+    color: '#6b7280',
+    fontFamily: 'Poppins-Regular',
+  },
+
+  // Logout Button
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: scaleHeight(16),
+    paddingHorizontal: scaleWidth(4),
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+    marginTop: scaleHeight(8),
+  },
+  logoutIcon: {
+    width: scaleWidth(44),
+    height: scaleWidth(44),
+    borderRadius: scaleWidth(22),
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: scaleWidth(16),
   },
   logoutText: {
-    color: '#dc2626',
+    flex: 1,
+    fontSize: scaleFont(16),
     fontWeight: '600',
+    color: '#ef4444',
+    fontFamily: 'Poppins-SemiBold',
   },
 });

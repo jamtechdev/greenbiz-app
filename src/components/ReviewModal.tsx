@@ -19,6 +19,7 @@ import CustomDropdown from './CustomDropdown';
 import CustomDateTimePicker from './CustomDateTimePicker';
 import MediaUploadComponent from './MediaUpload';
 import { apiService } from '../api/axiosConfig';
+import { scale, scaleFont, scaleHeight, scaleWidth } from '../utils/resposive';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -90,7 +91,9 @@ export default function DetailModal({
       errors.original_price = 'Valid price is required';
     }
 
-    if (!fields.parent_category?.value) {
+    // Category validation - check both possible field names
+    const categoryValue = fields.parent_category?.value || fields.product_cat?.value;
+    if (!categoryValue) {
       errors.parent_category = 'Category is required';
     }
 
@@ -395,10 +398,19 @@ export default function DetailModal({
     
     if (selectedCategory) {
       setSelectedCategoryId(selectedCategory.id);
+      // Update both possible field names
       handleFieldChange('parent_category', categoryName);
+      handleFieldChange('product_cat', categoryName);
       // Clear subcategory when category changes
       handleFieldChange('sub_category', '');
+      handleFieldChange('product_subcat', '');
     }
+  };
+
+  const handleSubCategoryChange = (subCategoryName) => {
+    // Update both possible field names
+    handleFieldChange('sub_category', subCategoryName);
+    handleFieldChange('product_subcat', subCategoryName);
   };
 
   const handleAuctionGroupChange = (value) => {
@@ -427,6 +439,79 @@ export default function DetailModal({
       );
     }
     return null;
+  };
+
+  // Helper function to get category value
+  const getCategoryValue = () => {
+    return fields.product_cat?.value || fields.parent_category?.value || '';
+  };
+
+  // Helper function to get subcategory value
+  const getSubCategoryValue = () => {
+    return fields.product_subcat?.value || fields.sub_category?.value || '';
+  };
+
+  // Helper function to render category field
+  const renderCategoryField = () => {
+    // If product_cat exists and has a value, show it as text
+    if (fields.product_cat && fields.product_cat.value) {
+      return (
+        <View style={styles.fieldContainer}>
+          <Text style={styles.label}>Category *</Text>
+          <View style={styles.readOnlyField}>
+            <Text style={styles.readOnlyText} numberOfLines={1}>{fields.product_cat.value}</Text>
+          </View>
+        </View>
+      );
+    }
+    
+    // Otherwise show dropdown
+    return (
+      <View style={styles.fieldContainer}>
+        <Text style={styles.label}>Category *</Text>
+        <CustomDropdown
+          options={categories.map(cat => cat.name)}
+          selectedValue={getCategoryValue() || (categories.length > 0 ? categories[0].name : 'Electronics')}
+          onSelect={handleCategoryChange}
+          placeholder="Select category"
+          label="Product Category"
+          loading={loadingCategories}
+          hasError={!!validationErrors.parent_category}
+        />
+        {renderFieldError('parent_category')}
+      </View>
+    );
+  };
+
+  // Helper function to render subcategory field
+  const renderSubCategoryField = () => {
+    // If product_subcat exists and has a value, show it as text
+    if (fields.product_subcat && fields.product_subcat.value) {
+      return (
+        <View style={styles.fieldContainer}>
+          <Text style={styles.label}>Sub Category</Text>
+          <View style={styles.readOnlyField}>
+            <Text style={styles.readOnlyText} numberOfLines={1}>{fields.product_subcat.value}</Text>
+          </View>
+        </View>
+      );
+    }
+    
+    // Otherwise show dropdown
+    return (
+      <View style={styles.fieldContainer}>
+        <Text style={styles.label}>Sub Category</Text>
+        <CustomDropdown
+          options={subCategories}
+          selectedValue={getSubCategoryValue()}
+          onSelect={handleSubCategoryChange}
+          placeholder="Select subcategory"
+          label="Sub Category"
+          loading={loadingSubCategories}
+          disabled={!selectedCategoryId && !fields.product_cat?.value}
+        />
+      </View>
+    );
   };
 
   return (
@@ -571,21 +656,7 @@ export default function DetailModal({
               </View>
               
               <View style={styles.row}>
-                <View style={[styles.fieldContainer, styles.halfWidth]}>
-                  <Text style={styles.label}>Price *</Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      validationErrors.original_price && styles.inputError
-                    ]}
-                    keyboardType="decimal-pad"
-                    value={fields.original_price?.value || ''}
-                    onChangeText={text => handleFieldChange('original_price', text)}
-                    placeholder="0.00"
-                    placeholderTextColor="#9ca3af"
-                  />
-                  {renderFieldError('original_price')}
-                </View>
+               
 
                 <View style={[styles.fieldContainer, styles.halfWidth]}>
                   <Text style={styles.label}>Currency</Text>
@@ -618,6 +689,21 @@ export default function DetailModal({
                     placeholder="Select currency"
                     label="Currency"
                   />
+                </View>
+                 <View style={[styles.fieldContainer, styles.halfWidth]}>
+                  <Text style={styles.label}>Price *</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      validationErrors.original_price && styles.inputError
+                    ]}
+                    keyboardType="decimal-pad"
+                    value={fields.original_price?.value || ''}
+                    onChangeText={text => handleFieldChange('original_price', text)}
+                    placeholder="0.00"
+                    placeholderTextColor="#9ca3af"
+                  />
+                  {renderFieldError('original_price')}
                 </View>
               </View>
             </View>
@@ -721,35 +807,11 @@ export default function DetailModal({
               
               <View style={styles.row}>
                 <View style={[styles.fieldContainer, styles.halfWidth]}>
-                  <Text style={styles.label}>Category *</Text>
-                  <CustomDropdown
-                    options={categories.map(cat => cat.name)}
-                    selectedValue={fields.parent_category?.value || (categories.length > 0 ? categories[0].name : 'Electronics')}
-                    onSelect={handleCategoryChange}
-                    placeholder="Select category"
-                    label="Product Category"
-                    loading={loadingCategories}
-                    hasError={!!validationErrors.parent_category}
-                  />
-                  {renderFieldError('parent_category')}
+                  {renderCategoryField()}
                 </View>
 
                 <View style={[styles.fieldContainer, styles.halfWidth]}>
-                  <Text style={styles.label}>Sub Category</Text>
-                  <CustomDropdown
-                    options={subCategories}
-                    selectedValue={fields.sub_category?.value || ''}
-                    onSelect={(val) => {
-                      const stringValue = val && typeof val === 'object' ? 
-                        (val.name || val.label || val.value || String(val)) : 
-                        String(val || '');
-                      handleFieldChange('sub_category', stringValue);
-                    }}
-                    placeholder="Select subcategory"
-                    label="Sub Category"
-                    loading={loadingSubCategories}
-                    disabled={!selectedCategoryId}
-                  />
+                  {renderSubCategoryField()}
                 </View>
               </View>
 
@@ -951,7 +1013,7 @@ export default function DetailModal({
                   </View>
 
                   <View style={[styles.fieldContainer, styles.halfWidth]}>
-                    <Text style={styles.label}>Reserve Price (Optional)</Text>
+                    <Text style={styles.label}>Reserve Price</Text>
                     <TextInput
                       style={[
                         styles.input,
@@ -1032,8 +1094,8 @@ export default function DetailModal({
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Category:</Text>
                   <Text style={styles.summaryValue}>
-                    {fields.parent_category?.value}
-                    {fields.sub_category?.value && ` / ${fields.sub_category.value}`}
+                    {getCategoryValue()}
+                    {getSubCategoryValue() && ` / ${getSubCategoryValue()}`}
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>
@@ -1089,7 +1151,6 @@ export default function DetailModal({
     </Modal>
   );
 }
-
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
@@ -1098,14 +1159,14 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: scale(20),
+    borderTopRightRadius: scale(20),
     maxHeight: screenHeight * 0.9,
     minHeight: screenHeight * 0.9,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
+    shadowOffset: { width: 0, height: scaleHeight(-4) },
     shadowOpacity: 0.2,
-    shadowRadius: 16,
+    shadowRadius: scale(16),
     elevation: 16,
   },
 
@@ -1114,40 +1175,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: scaleWidth(20),
+    paddingVertical: scaleHeight(16),
+    borderBottomWidth: scale(1),
     borderBottomColor: '#e5e7eb',
     backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: scale(20),
+    borderTopRightRadius: scale(20),
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: scaleWidth(12),
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: scaleWidth(40),
+    height: scaleWidth(40),
+    borderRadius: scale(20),
     backgroundColor: '#eef2ff',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: '600',
     color: '#1f2937',
+    fontFamily: 'Poppins-Bold',
   },
   modalSubtitle: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#6b7280',
-    marginTop: 2,
+    marginTop: scaleHeight(2),
+    fontFamily: 'Poppins-Regular',
   },
   closeButton: {
-    padding: 6,
-    borderRadius: 16,
+    padding: scale(6),
+    borderRadius: scale(16),
     backgroundColor: '#f3f4f6',
   },
 
@@ -1156,153 +1219,178 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: scaleWidth(20),
+    paddingTop: scaleHeight(16),
   },
   section: {
-    marginBottom: 24,
+    marginBottom: scaleHeight(24),
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
+    gap: scaleWidth(8),
+    marginBottom: scaleHeight(16),
   },
   sectionIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: scaleWidth(28),
+    height: scaleWidth(28),
+    borderRadius: scale(8),
     backgroundColor: '#eef2ff',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '600',
     color: '#374151',
+    fontFamily: 'Poppins-Regular',
   },
 
   // Fields
   fieldContainer: {
-    marginBottom: 16,
+    marginBottom: scaleHeight(16),
   },
   label: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '500',
     color: '#374151',
-    marginBottom: 6,
+    marginBottom: scaleHeight(6),
+    fontFamily: 'Poppins-Regular',
   },
   input: {
-    borderWidth: 1,
+    borderWidth: scale(1),
     borderColor: '#d1d5db',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    borderRadius: scale(8),
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(10),
+    fontSize: scaleFont(14),
     backgroundColor: '#fff',
     color: '#1f2937',
+    fontFamily: 'Poppins-Regular',
   },
   inputError: {
     borderColor: '#ef4444',
     backgroundColor: '#fef2f2',
   },
   textArea: {
-    height: 70,
+    height: scaleHeight(70),
     textAlignVertical: 'top',
   },
   fieldHint: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#6b7280',
-    marginTop: 4,
+    marginTop: scaleHeight(4),
     fontStyle: 'italic',
+    fontFamily: 'Poppins-Regular',
   },
   errorText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#ef4444',
-    marginTop: 4,
+    marginTop: scaleHeight(4),
     fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
   },
   row: {
     flexDirection: 'row',
-    gap: 12,
+    gap: scaleWidth(12),
   },
   halfWidth: {
     flex: 1,
   },
   datePickerWrapper: {
     backgroundColor: '#fff',
-    paddingHorizontal: 4,
+    paddingHorizontal: scaleWidth(4),
   },
   datePickerError: {
-    borderWidth: 1,
+    borderWidth: scale(1),
     borderColor: '#ef4444',
-    borderRadius: 8,
+    borderRadius: scale(8),
     backgroundColor: '#fef2f2',
   },
   datePickerText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#1f2937',
+    fontFamily: 'Poppins-Regular',
+  },
+
+  // Read-only field styles
+  readOnlyField: {
+    borderWidth: scale(1),
+    borderColor: '#e5e7eb',
+    borderRadius: scale(8),
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(10),
+    backgroundColor: '#f9fafb',
+  },
+  readOnlyText: {
+    fontSize: scaleFont(14),
+    color: '#374151',
+    fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
   },
 
   // Currency Info
   currencyInfoContainer: {
-    gap: 4,
+    gap: scaleWidth(4),
   },
   currencyInfo: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6366f1',
     fontStyle: 'italic',
-    marginTop: 2,
+    marginTop: scaleHeight(2),
+    fontFamily: 'Poppins-Regular',
   },
 
   // Custom Auction Group
   customGroupContainer: {
-    gap: 8,
+    gap: scaleWidth(8),
   },
   customGroupButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: scaleWidth(8),
   },
   customGroupButtonCancel: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: scaleHeight(8),
+    paddingHorizontal: scaleWidth(16),
     backgroundColor: '#f3f4f6',
-    borderRadius: 6,
+    borderRadius: scale(6),
     alignItems: 'center',
   },
   customGroupButtonCancelText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#6b7280',
     fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
   },
   customGroupButtonSave: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: scaleHeight(8),
+    paddingHorizontal: scaleWidth(16),
     backgroundColor: '#6366f1',
-    borderRadius: 6,
+    borderRadius: scale(6),
     alignItems: 'center',
   },
   customGroupButtonSaveText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#fff',
     fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
   },
 
   // Product Type
   productTypeContainer: {
-    gap: 12,
+    gap: scaleWidth(12),
   },
   productTypeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
+    gap: scaleWidth(12),
+    paddingVertical: scaleHeight(12),
+    paddingHorizontal: scaleWidth(16),
+    borderWidth: scale(1),
     borderColor: '#e5e7eb',
-    borderRadius: 12,
+    borderRadius: scale(12),
     backgroundColor: '#fff',
   },
   productTypeButtonActive: {
@@ -1310,9 +1398,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#eef2ff',
   },
   productTypeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: scaleWidth(36),
+    height: scaleWidth(36),
+    borderRadius: scale(18),
     backgroundColor: '#f3f4f6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1324,82 +1412,87 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   productTypeTitle: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '600',
     color: '#6b7280',
+    fontFamily: 'Poppins-Regular',
   },
   productTypeTextActive: {
     color: '#6366f1',
   },
   productTypeDescription: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#9ca3af',
-    marginTop: 2,
+    marginTop: scaleHeight(2),
+    fontFamily: 'Poppins-Regular',
   },
 
   // Validation Summary
   validationSummary: {
     backgroundColor: '#fef2f2',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
+    borderRadius: scale(12),
+    padding: scale(16),
+    marginBottom: scaleHeight(24),
+    borderWidth: scale(1),
     borderColor: '#fecaca',
   },
   validationError: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#dc2626',
-    marginBottom: 4,
-    marginLeft: 8,
+    marginBottom: scaleHeight(4),
+    marginLeft: scaleWidth(8),
+    fontFamily: 'Poppins-Regular',
   },
 
   // Summary
   summarySection: {
-    marginBottom: 24,
+    marginBottom: scaleHeight(24),
   },
   summaryCard: {
     backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
+    borderRadius: scale(12),
+    padding: scale(16),
+    borderWidth: scale(1),
     borderColor: '#e2e8f0',
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: scaleHeight(8),
   },
   summaryLabel: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#64748b',
     fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
   },
   summaryValue: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#1e293b',
     fontWeight: '600',
     textAlign: 'right',
     flex: 1,
-    marginLeft: 12,
+    marginLeft: scaleWidth(12),
+    fontFamily: 'Poppins-Regular',
   },
   bottomSpacing: {
-    height: 16,
+    height: scaleHeight(16),
   },
 
   // Buttons
   buttonContainer: {
     flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    gap: scaleWidth(12),
+    paddingHorizontal: scaleWidth(20),
+    paddingVertical: scaleHeight(16),
     backgroundColor: '#fff',
-    borderTopWidth: 1,
+    borderTopWidth: scale(1),
     borderTopColor: '#e5e7eb',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
+    shadowOffset: { width: 0, height: scaleHeight(-2) },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: scale(8),
     elevation: 8,
   },
   cancelButton: {
@@ -1407,31 +1500,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
+    gap: scaleWidth(6),
+    paddingVertical: scaleHeight(12),
     backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    borderWidth: 1,
+    borderRadius: scale(8),
+    borderWidth: scale(1),
     borderColor: '#d1d5db',
   },
   cancelButtonText: {
     color: '#6b7280',
     fontWeight: '500',
-    fontSize: 14,
+    fontSize: scaleFont(14),
+    fontFamily: 'Poppins-Regular',
   },
   saveButton: {
     flex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
+    gap: scaleWidth(6),
+    paddingVertical: scaleHeight(12),
     backgroundColor: '#6366f1',
-    borderRadius: 8,
+    borderRadius: scale(8),
     shadowColor: '#6366f1',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: scaleHeight(2) },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: scale(4),
     elevation: 4,
   },
   saveButtonDisabled: {
@@ -1441,6 +1535,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: scaleFont(14),
+    fontFamily: 'Poppins-Regular',
   },
 });
