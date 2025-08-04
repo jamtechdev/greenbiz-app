@@ -323,7 +323,9 @@ export default function DashboardScreen({ navigation }) {
         styles.enhancedListingCard,
         { marginLeft: index % 2 === 0 ? 0 : 8 },
       ]}
-      onPress={() => navigation.navigate('Details', { listing: item })}
+     onPress={() =>
+      navigation.navigate('ProductDetailsById', { productId: item.ID })
+    }
       activeOpacity={0.8}
     >
       <View style={styles.cardImageContainer}>
@@ -331,7 +333,7 @@ export default function DashboardScreen({ navigation }) {
           <Image
             source={{ uri: item.thumbnail || item.featured_image }}
             style={styles.cardImage}
-            resizeMode="cover"
+            resizeMode="contain"
             onError={error => {
               console.log('Image load error:', error);
             }}
@@ -351,9 +353,9 @@ export default function DashboardScreen({ navigation }) {
         </View>
 
         {/* Heart Icon */}
-        <TouchableOpacity style={styles.heartButton}>
+        {/* <TouchableOpacity style={styles.heartButton}>
           <Icon name="heart" size={16} color="#e11d48" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       <View style={styles.cardContent}>
@@ -384,9 +386,9 @@ export default function DashboardScreen({ navigation }) {
             <TouchableOpacity style={styles.actionIcon}>
               <Icon name="eye" size={14} color="#64748b" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionIcon}>
+            {/* <TouchableOpacity style={styles.actionIcon}>
               <Icon name="share-2" size={14} color="#64748b" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
 
@@ -661,7 +663,7 @@ export default function DashboardScreen({ navigation }) {
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Recent Machines</Text>
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('Listings')}
+                  onPress={() => navigation.navigate('MyList')}
                 >
                   <Text style={styles.seeAllText}>View All</Text>
                 </TouchableOpacity>
@@ -931,6 +933,7 @@ const styles = StyleSheet.create({
   },
   enhancedListingCard: {
     backgroundColor: '#fff',
+    marginBottom: scaleHeight(10),
     borderRadius: scale(16),
     width: scaleWidth((width - 48) / 2), // use scaleWidth for cards
     shadowColor: '#000',
@@ -1001,6 +1004,7 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: scale(12),
+  
   },
   cardTitle: {
     fontSize: scaleFont(14),

@@ -18,16 +18,22 @@ import {
   scaleFont,
   scale,
 } from '../../../utils/resposive';
-import CustomDropdown from '../../../components/CustomDropdown';
+
+import PhoneInput, { 
+  validatePhoneNumber, 
+  getCompletePhoneNumber 
+} from '../../../components/PhoneInput'; // Import the reusable component
 import { apiService } from '../../../api/axiosConfig';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
 import CustomAlert from '../../../components/CustomAlert';
+import CustomDropdown from '../../../components/CustomDropdown';
 
 interface FormData {
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
+  countryCode: string;
   password: string;
   confirmPassword: string;
   country: string;
@@ -41,11 +47,13 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
   const [userType, setUserType] = useState<'buyer' | 'seller'>('buyer');
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [phoneError, setPhoneError] = useState<string>('');
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
+    countryCode: '+61', // Default to Australia
     password: '',
     confirmPassword: '',
     country: 'Australia',
@@ -56,16 +64,45 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
   });
 
   const countries = [
-    'Australia, Bangladesh, Cambodia, Canada, Chile, China, Denmark, France, Germany, Hong Kong, India, Indonesia, Japan, Macao, Malaysia, Mexico, New Zealand, Pakistan, South Korea, Taiwan, Thailand, Vietnam',
+    'Australia',
+    'Bangladesh',
+    'Cambodia',
+    'Canada',
+    'Chile',
+    'China',
+    'Denmark',
+    'France',
+    'Germany',
+    'Hong Kong',
+    'India',
+    'Indonesia',
+    'Japan',
+    'Macao',
+    'Malaysia',
+    'Mexico',
+    'New Zealand',
+    'Pakistan',
+    'South Korea',
+    'Taiwan',
+    'Thailand',
+    'Vietnam'
   ];
-const roles = ['Owner', 'Management', 'Purchasing', 'Sales', 'Technical', 'Others'];
- const businessTypes = [
-  'Manufacturer',
-  'Enterprise',
-  'Broker',
-  'System Integrator',
-  'Recycler'
-];
+
+  const roles = [
+    'Owner',
+    'Management',
+    'Purchasing',
+    'Sales',
+    'Technical',
+    'Others',
+  ];
+  const businessTypes = [
+    'Manufacturer',
+    'Enterprise',
+    'Broker',
+    'System Integrator',
+    'Recycler',
+  ];
 
   const {
     alertConfig,
@@ -78,6 +115,11 @@ const roles = ['Owner', 'Management', 'Purchasing', 'Sales', 'Technical', 'Other
 
   const updateFormData = useCallback((field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Clear phone error when user starts typing
+    if (field === 'phone' || field === 'countryCode') {
+      setPhoneError('');
+    }
   }, []);
 
   // Fixed showToast to properly use custom alert
@@ -86,7 +128,7 @@ const roles = ['Owner', 'Management', 'Purchasing', 'Sales', 'Technical', 'Other
   };
 
   const validateStep1 = useCallback(() => {
-    const { firstName, lastName, email, phone, password, confirmPassword } =
+    const { firstName, lastName, email, phone, countryCode, password, confirmPassword } =
       formData;
 
     if (!firstName.trim()) {
@@ -101,10 +143,15 @@ const roles = ['Owner', 'Management', 'Purchasing', 'Sales', 'Technical', 'Other
       showToast('Error', 'Valid email is required');
       return false;
     }
-    if (!phone.trim()) {
-      showToast('Error', 'Phone number is required');
+    
+    // Validate phone number using the helper function
+    const phoneValidation = validatePhoneNumber(countryCode, phone);
+    if (!phoneValidation.isValid) {
+      setPhoneError(phoneValidation.error || 'Invalid phone number');
+      showToast('Error', phoneValidation.error || 'Invalid phone number');
       return false;
     }
+    
     if (!password.trim() || password.length < 6) {
       showToast('Error', 'Password must be at least 6 characters');
       return false;
@@ -146,11 +193,14 @@ const roles = ['Owner', 'Management', 'Purchasing', 'Sales', 'Technical', 'Other
       // Create FormData object for the API
       const registrationData = new FormData();
 
+      // Use the helper function to get complete phone number
+      const fullPhoneNumber = getCompletePhoneNumber(formData.countryCode, formData.phone);
+
       // Map form data to your API payload format
       registrationData.append('first_name', formData.firstName);
       registrationData.append('last_name', formData.lastName);
       registrationData.append('email', formData.email);
-      registrationData.append('billing_phone', formData.phone);
+      registrationData.append('billing_phone', fullPhoneNumber);
       registrationData.append('password', formData.password);
       registrationData.append('confirm_password', formData.confirmPassword);
       registrationData.append('billing_country', formData.country);
@@ -163,7 +213,7 @@ const roles = ['Owner', 'Management', 'Purchasing', 'Sales', 'Technical', 'Other
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
-        billing_phone: formData.phone,
+        billing_phone: fullPhoneNumber,
         billing_country: formData.country,
         greenbidz_company: formData.company,
         greenbidz_role: formData.role,
@@ -216,6 +266,15 @@ const roles = ['Owner', 'Management', 'Purchasing', 'Sales', 'Technical', 'Other
       setIsLoading(false);
     }
   }, [formData, userType, navigation, showSuccess, showError]);
+
+  // Phone input handlers
+  const handleCountryCodeChange = useCallback((code: string) => {
+    updateFormData('countryCode', code);
+  }, [updateFormData]);
+
+  const handlePhoneNumberChange = useCallback((number: string) => {
+    updateFormData('phone', number);
+  }, [updateFormData]);
 
   const Header = () => (
     <View style={styles.header}>
@@ -384,18 +443,18 @@ const roles = ['Owner', 'Management', 'Purchasing', 'Sales', 'Technical', 'Other
                 />
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Phone *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.phone}
-                  onChangeText={text => updateFormData('phone', text)}
-                  placeholder="Enter phone number"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="phone-pad"
-                  textContentType="telephoneNumber"
-                />
-              </View>
+              {/* Using the reusable PhoneInput component */}
+              <PhoneInput
+                countryCode={formData.countryCode}
+                phoneNumber={formData.phone}
+                onCountryCodeChange={handleCountryCodeChange}
+                onPhoneNumberChange={handlePhoneNumberChange}
+                label="Phone"
+                placeholder="Enter phone number"
+                required={true}
+                error={phoneError}
+                testID="signup-phone-input"
+              />
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Password *</Text>
@@ -541,7 +600,7 @@ const roles = ['Owner', 'Management', 'Purchasing', 'Sales', 'Technical', 'Other
                   { label: 'First Name', value: formData.firstName },
                   { label: 'Last Name', value: formData.lastName },
                   { label: 'Email Address', value: formData.email },
-                  { label: 'Phone', value: formData.phone },
+                  { label: 'Phone', value: getCompletePhoneNumber(formData.countryCode, formData.phone) },
                   { label: 'Country', value: formData.country },
                   { label: 'Company', value: formData.company },
                   { label: 'Role', value: formData.role },

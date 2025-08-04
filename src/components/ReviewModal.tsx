@@ -961,7 +961,7 @@ export default function DetailModal({
                         onChange={date =>
                           handleFieldChange(
                             'auction_start_date',
-                            date?.toISOString() || '',
+                           new Date().toISOString() || '',
                           )
                         }
                         textStyle={styles.datePickerText}

@@ -1,4 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   View,
   Text,
@@ -11,12 +17,16 @@ import {
   Platform,
   ActivityIndicator,
   Dimensions,
+  Alert,
+  KeyboardAvoidingView,
+  BackHandler,
+  RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import BottomNav from '../../../components/BottomNavbar';
 import { useAppContext } from '../../../_customContext/AppProvider';
-
+import PhoneInput, { getCompletePhoneNumber } from '../../../components/PhoneInput';
 import { apiService } from '../../../api/axiosConfig';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
 import CustomAlert from '../../../components/CustomAlert';
@@ -24,15 +34,39 @@ import { scaleWidth, scaleHeight, scaleFont } from '../../../utils/resposive';
 
 const { width, height } = Dimensions.get('window');
 
-export default function ProfileScreen({ navigation }) {
+interface FormData {
+  first_name: string;
+  last_name: string;
+  username: string;
+  email: string;
+  billing_phone: string;
+  billing_country: string;
+  company: string;
+  role: string;
+  business_type: string;
+  user_type: string;
+  phoneCountryCode: string;
+  phoneNumber: string;
+}
+
+interface ProfileScreenProps {
+  navigation: any;
+}
+
+export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { showOverlay, setShowOverlay } = useAppContext();
   const { alertConfig, hideAlert, showSuccess, showError, showConfirm } =
     useCustomAlert();
 
+  const scrollViewRef = useRef<ScrollView>(null);
+  const mountedRef = useRef(true);
+
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
+  const [refreshing, setRefreshing] = useState(false);
+
+  const initialForm: FormData = {
     first_name: '',
     last_name: '',
     username: '',
@@ -43,367 +77,611 @@ export default function ProfileScreen({ navigation }) {
     role: '',
     business_type: '',
     user_type: '',
-  });
-  const [originalForm, setOriginalForm] = useState({});
+    phoneCountryCode: '+61',
+    phoneNumber: '',
+  };
+  const [form, setForm] = useState<FormData>(initialForm);
+  const [originalForm, setOriginalForm] = useState<FormData>(initialForm);
 
+  // Memoized display values
+  const initials = useMemo(() => {
+    const f = form.first_name.charAt(0) || '';
+    const l = form.last_name.charAt(0) || '';
+    return (f + l).toUpperCase() || 'U';
+  }, [form.first_name, form.last_name]);
+
+  const fullName = useMemo(() => {
+    return `${form.first_name} ${form.last_name}`.trim() || 'User';
+  }, [form.first_name, form.last_name]);
+
+  const hasChanges = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(originalForm),
+    [form, originalForm]
+  );
+
+  // Prevent state updates after unmount
   useEffect(() => {
-    fetchUserProfile();
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
+  // Handle Android back → discard edits if needed
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      if (!editing) {
-        fetchUserProfile();
+    const backAction = () => {
+      if (editing && hasChanges) {
+        onCancel();
+        return true;
       }
-    });
-    return unsubscribe;
-  }, [navigation, editing]);
+      return false;
+    };
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+    return () => backHandler.remove();
+  }, [editing, hasChanges, onCancel]);
 
-  const fetchUserProfile = async () => {
-    try {
-      setLoading(true);
-      console.log('🔄 Fetching user profile...');
+  // Fetch profile from API
+  const fetchUserProfile = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
 
-      const response = await apiService.getUser();
+      try {
+        const { data } = await apiService.getUser();
+        if (data.success) {
+          const u = data.data;
+          const full = u.billing_phone || '';
+          // parse: country code + rest
+          const m = full.match(/^(\+\d{1,4})\s*(.*)$/);
+          const phoneCountryCode = m ? m[1] : '+61';
+          const phoneNumber = m ? m[2].trim() : '';
 
-      if (response.data && response.data.success) {
-        const userData = response.data.data;
-        const formData = {
-          first_name: userData.first_name || '',
-          last_name: userData.last_name || '',
-          username: userData.username || '',
-          email: userData.email || '',
-          billing_phone: userData.billing_phone || '',
-          billing_country: userData.billing_country || '',
-          company: userData.company || '',
-          role: userData.role || '',
-          business_type: userData.business_type || '',
-          user_type: userData.user_type || '',
-        };
-
-        setForm(formData);
-        setOriginalForm(formData);
-        console.log('✅ Profile fetched successfully');
-      } else {
-        navigation.navigate('Login');
-        showError({
-          title: 'Failed to Load Profile',
-          message: 'Unable to fetch your profile data.',
-        });
-      }
-    } catch (error) {
-      console.error('❌ Error fetching profile:', error);
-      showError({
-        title: 'Profile Load Error',
-        message: 'Failed to load your profile. Please try again.',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onChange = (key, value) => setForm({ ...form, [key]: value });
-
-  const onCancel = () => {
-    setForm(originalForm);
-    setEditing(false);
-  };
-
-  const onSave = async () => {
-    try {
-      setSaving(true);
-      console.log('💾 Saving profile changes...');
-
-      const updateData = {
-        first_name: form.first_name,
-        last_name: form.last_name,
-        username: form.username,
-        email: form.email,
-        billing_phone: form.billing_phone,
-        billing_country: form.billing_country,
-        company: form.company,
-        business_type: form.business_type,
-        user_type: form.user_type,
-      };
-
-      const response = await apiService.updateProfile(updateData);
-
-      if (response.data && response.data.success) {
-        setOriginalForm(form);
-        setEditing(false);
-        setSaving(false);
-
-        showSuccess({
-          title: 'Profile Updated',
-          message: 'Your profile has been successfully updated.',
-        });
-
-        console.log('✅ Profile updated successfully');
-      } else {
-        throw new Error(response.data?.message || 'Update failed');
-      }
-    } catch (error) {
-      console.error('❌ Error updating profile:', error);
-      setSaving(false);
-      showError({
-        title: 'Update Failed',
-        message:
-          error.response?.data?.message ||
-          'Failed to update your profile. Please try again.',
-      });
-    }
-  };
-
-  const handleLogout = () => {
-    showConfirm({
-      title: 'Logout',
-      message: 'Are you sure you want to logout?',
-      confirmText: 'Logout',
-      destructive: true,
-      onConfirm: async () => {
-        try {
-          console.log('🚪 Logging out...');
-
+          const newForm: FormData = {
+            first_name: u.first_name || '',
+            last_name: u.last_name || '',
+            username: u.username || '',
+            email: u.email || '',
+            billing_phone: full,
+            billing_country: u.billing_country || '',
+            company: u.company || '',
+            role: u.role || '',
+            business_type: u.business_type || '',
+            user_type: u.user_type || '',
+            phoneCountryCode,
+            phoneNumber,
+          };
+          if (mountedRef.current) {
+            setForm(newForm);
+            setOriginalForm(newForm);
+          }
+        } else {
+          throw new Error('Failed to fetch profile');
+        }
+      } catch (err: any) {
+        console.error('Fetch error:', err);
+        if (err.response?.status === 401) {
           await AsyncStorage.multiRemove([
             'userToken',
             'isLoggedIn',
             'userData',
-            'shouldShowReviewModal',
           ]);
-
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
-
-          console.log('✅ Logout successful');
-        } catch (error) {
-          console.error('❌ Error during logout:', error);
-          showError({
-            title: 'Logout Error',
-            message: 'Failed to logout properly. Please try again.',
-          });
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          return;
         }
+        showError({
+          title: 'Error',
+          message:
+            err.response?.data?.message ||
+            'Could not load your profile. Please try again.',
+        });
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    [navigation, showError]
+  );
+
+  // run on mount
+  useEffect(() => {
+    fetchUserProfile();
+  }, []);
+
+  // re-fetch on focus
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => {
+      if (!editing) fetchUserProfile();
+    });
+    return unsub;
+  }, [navigation, editing, fetchUserProfile]);
+
+  const onChange = useCallback(
+    (key: keyof FormData, value: string) => {
+      setForm((prev) => ({ ...prev, [key]: value }));
+    },
+    []
+  );
+
+  const onCancel = useCallback(() => {
+    if (hasChanges) {
+      Alert.alert(
+        'Discard Changes',
+        'Are you sure you want to discard your changes?',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              setForm(originalForm);
+              setEditing(false);
+            },
+          },
+        ]
+      );
+    } else {
+      setEditing(false);
+    }
+  }, [hasChanges, originalForm]);
+
+  // simple validation
+  const validateForm = useCallback(() => {
+    const errs: string[] = [];
+    if (!form.first_name.trim()) errs.push('First name is required');
+    if (!form.last_name.trim()) errs.push('Last name is required');
+    if (!form.username.trim()) errs.push('Username is required');
+    if (!form.email.trim()) errs.push('Email is required');
+    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (form.email && !emailRx.test(form.email.trim()))
+      errs.push('Please enter a valid email');
+    if (
+      form.phoneNumber &&
+      form.phoneNumber.length > 0 &&
+      form.phoneNumber.length < 6
+    )
+      errs.push('Phone must be at least 6 digits');
+    return { isValid: errs.length === 0, errors: errs };
+  }, [form]);
+
+  const onSave = useCallback(async () => {
+    const { isValid, errors } = validateForm();
+    if (!isValid) {
+      showError({ title: 'Validation', message: errors.join('\n') });
+      return;
+    }
+    try {
+      setSaving(true);
+      const payload = {
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        username: form.username.trim(),
+        email: form.email.trim().toLowerCase(),
+        billing_phone: form.phoneNumber
+          ? getCompletePhoneNumber(
+              form.phoneCountryCode,
+              form.phoneNumber
+            )
+          : '',
+        billing_country: form.billing_country.trim(),
+        company: form.company.trim(),
+        business_type: form.business_type.trim(),
+        user_type: form.user_type.trim(),
+      };
+      const res = await apiService.updateProfile(payload);
+      if (!res.data.success)
+        throw new Error(res.data.message || 'Update failed');
+
+      const saved: FormData = {
+        ...form,
+        billing_phone: payload.billing_phone,
+      };
+      setOriginalForm(saved);
+      setForm(saved);
+      setEditing(false);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      showSuccess({
+        title: 'Saved',
+        message: 'Your profile has been updated.',
+      });
+    } catch (err: any) {
+      console.error('Save error:', err);
+      let msg = 'Could not update profile.';
+      if (err.response?.status === 409)
+        msg = 'Username or email already in use.';
+      else if (err.response?.data?.message) msg = err.response.data.message;
+      showError({ title: 'Error', message: msg });
+    } finally {
+      if (mountedRef.current) setSaving(false);
+    }
+  }, [form, validateForm, showError, showSuccess]);
+
+  const handleLogout = useCallback(() => {
+    showConfirm({
+      title: 'Sign Out',
+      message: 'Are you sure?',
+      confirmText: 'Sign Out',
+      destructive: true,
+      onConfirm: async () => {
+        await AsyncStorage.multiRemove([
+          'userToken',
+          'isLoggedIn',
+          'userData',
+          'userPreferences',
+        ]);
+        mountedRef.current &&
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
       },
     });
-  };
+  }, [showConfirm, navigation]);
 
-  const getInitials = () => {
-    const firstName = form.first_name || '';
-    const lastName = form.last_name || '';
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || 'U';
-  };
+  const onRefresh = useCallback(() => {
+    if (!editing) fetchUserProfile(true);
+  }, [editing, fetchUserProfile]);
 
-  const getFullName = () => {
-    const firstName = form.first_name || '';
-    const lastName = form.last_name || '';
-    return `${firstName} ${lastName}`.trim() || 'User';
-  };
+  const renderFormField = useCallback(
+    (
+      label: string,
+      key: keyof FormData,
+      value: string,
+      editable: boolean,
+      keyboardType: 'default' | 'email-address' | 'numeric' = 'default',
+      multiline = false,
+      maxLength?: number
+    ) => (
+      <View style={styles.fieldContainer} key={key}>
+        <Text style={styles.fieldLabel}>
+          {label}
+          {['first_name', 'last_name', 'username', 'email'].includes(
+            key
+          ) && <Text style={styles.requiredIndicator}> *</Text>}
+        </Text>
+        {editable ? (
+          <TextInput
+            style={[
+              styles.fieldInput,
+              multiline && styles.multilineInput,
+              saving && styles.disabledInput,
+            ]}
+            value={value}
+            onChangeText={(txt) => onChange(key, txt)}
+            keyboardType={keyboardType}
+            placeholder={`Enter ${label.toLowerCase()}`}
+            placeholderTextColor="#9ca3af"
+            multiline={multiline}
+            numberOfLines={multiline ? 3 : 1}
+            editable={!saving}
+            autoCapitalize={
+              keyboardType === 'email-address' ? 'none' : 'words'
+            }
+            autoCorrect={false}
+            maxLength={maxLength}
+          />
+        ) : (
+          <View style={styles.fieldDisplay}>
+            <Text
+              style={[styles.fieldValue, !value && styles.emptyValue]}
+            >
+              {value || 'Not provided'}
+            </Text>
+          </View>
+        )}
+      </View>
+    ),
+    [onChange, saving]
+  );
 
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
-        <View style={styles.loadingContent}>
-          <ActivityIndicator size="large" color="#667eea" />
-          <Text style={styles.loadingText}>Loading your profile...</Text>
-        </View>
+        <ActivityIndicator size="large" color="#00c0a2" />
+        <Text style={styles.loadingText}>
+          Loading your profile...
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#00c0a2" />
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="#00c0a2"
+      />
 
-      {/* Beautiful Header */}
+      {/* Header */}
       <View style={styles.headerContainer}>
         <View style={styles.headerGradient}>
           <SafeAreaView>
-            <View style={styles.headerContent}>
-              <View style={styles.headerTop}>
-                <View style={styles.headerLeft}>
-                  <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => navigation.goBack()}
-                  >
-                    <Icon name="arrow-left" size={20} color="#fff" />
-                  </TouchableOpacity>
-                  <View style={styles.headerTextContainer}>
-                    <Text style={styles.headerTitle}>My Profile</Text>
-                    <Text style={styles.headerSubtitle}>
-                      {editing ? 'Edit your details' : 'Manage your account'}
-                    </Text>
-                  </View>
-                </View>
-
-                {editing ? (
-                  <View style={styles.editActions}>
-                    <TouchableOpacity
-                      style={styles.cancelButton}
-                      onPress={onCancel}
-                      disabled={saving}
-                    >
-                      <Text style={styles.cancelButtonText}>X</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.saveButton,
-                        saving && styles.saveButtonDisabled,
-                      ]}
-                      onPress={onSave}
-                      disabled={saving}
-                    >
-                      {saving ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Icon name="check" size={16} color="#fff" />
-                      )}
-                      <Text style={styles.saveButtonText}>
-                        {saving ? 'Saving...' : 'Save'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => setEditing(true)}
-                  >
-                    <Icon name="edit-3" size={16} color="#fff" />
-                    <Text style={styles.editButtonText}>Edit</Text>
-                  </TouchableOpacity>
-                )}
+            <View style={styles.headerTop}>
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={styles.backButton}
+                activeOpacity={0.7}
+              >
+                <Icon
+                  name="arrow-left"
+                  size={scaleFont(20)}
+                  color="#fff"
+                />
+              </TouchableOpacity>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>
+                  My Profile
+                </Text>
+                <Text style={styles.headerSubtitle}>
+                  {editing
+                    ? 'Edit your details'
+                    : 'Manage your account'}
+                </Text>
               </View>
+              {editing ? (
+                <View style={styles.editActions}>
+                  <TouchableOpacity
+                    onPress={onCancel}
+                    disabled={saving}
+                    style={styles.actionButton}
+                    activeOpacity={0.7}
+                  >
+                    <Icon
+                      name="x"
+                      size={scaleFont(20)}
+                      color="#fff"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={onSave}
+                    disabled={saving || !hasChanges}
+                    style={[
+                      styles.actionButton,
+                      (!hasChanges || saving) &&
+                        styles.disabledButton,
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    {saving ? (
+                      <ActivityIndicator
+                        size="small"
+                        color="#fff"
+                      />
+                    ) : (
+                      <Icon
+                        name="check"
+                        size={scaleFont(20)}
+                        color="#fff"
+                      />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setEditing(true)}
+                  style={styles.actionButton}
+                  activeOpacity={0.7}
+                >
+                  <Icon
+                    name="edit-3"
+                    size={scaleFont(20)}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+              )}
             </View>
           </SafeAreaView>
         </View>
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#00c0a2"
+          />
+        }
       >
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarSection}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{getInitials()}</Text>
-              </View>
-              {editing && (
-                <TouchableOpacity style={styles.avatarEditButton}>
-                  <Icon name="camera" size={12} color="#fff" />
-                </TouchableOpacity>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {initials}
+              </Text>
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>{fullName}</Text>
+              <Text style={styles.userEmail}>
+                {form.email}
+              </Text>
+              {form.role && (
+                <Text style={styles.userRole}>
+                  {form.role}
+                </Text>
               )}
             </View>
+          </View>
+        </View>
 
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{getFullName()}</Text>
-              <Text style={styles.userEmail}>{form.email}</Text>
-              {form.business_type && (
-                <View style={styles.businessTypeBadge}>
-                  <Text style={styles.businessTypeText}>
-                    {form.business_type}
+        {/* Personal Information */}
+        <View style={styles.formSection}>
+          <Text style={styles.sectionTitle}>
+            Personal Information
+          </Text>
+          <View style={styles.formGrid}>
+            {renderFormField(
+              'First Name',
+              'first_name',
+              form.first_name,
+              editing,
+              'default',
+              false,
+              50
+            )}
+            {renderFormField(
+              'Last Name',
+              'last_name',
+              form.last_name,
+              editing,
+              'default',
+              false,
+              50
+            )}
+            {renderFormField(
+              'Username',
+              'username',
+              form.username,
+              editing,
+              'default',
+              false,
+              30
+            )}
+            {renderFormField(
+              'Email Address',
+              'email',
+              form.email,
+              editing,
+              'email-address',
+              false,
+              100
+            )}
+          </View>
+        </View>
+
+        {/* Contact Information */}
+        <View style={styles.formSection}>
+          <Text style={styles.sectionTitle}>
+            Contact Information
+          </Text>
+          <View style={styles.formGrid}>
+            {/* Phone Number */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>
+                Phone Number
+              </Text>
+              {editing ? (
+                <PhoneInput
+                  countryCode={form.phoneCountryCode}
+                  phoneNumber={form.phoneNumber}
+                  onCountryCodeChange={(code) =>
+                    onChange('phoneCountryCode', code)
+                  }
+                  onPhoneNumberChange={(num) =>
+                    onChange('phoneNumber', num)
+                  }
+                  placeholder="Enter phone number"
+                  disabled={saving}
+                />
+              ) : (
+                <View style={styles.fieldDisplay}>
+                  <Text
+                    style={[
+                      styles.fieldValue,
+                      !form.billing_phone &&
+                        styles.emptyValue,
+                    ]}
+                  >
+                    {form.billing_phone ||
+                      'Not provided'}
                   </Text>
                 </View>
               )}
             </View>
+            {renderFormField(
+              'Country',
+              'billing_country',
+              form.billing_country,
+              editing,
+              'default',
+              false,
+              50
+            )}
           </View>
         </View>
 
-        {/* Form Sections */}
-        <View style={styles.formsContainer}>
-          {/* Personal Information */}
-          <View style={styles.formSection}>
-            <Text style={styles.sectionTitle}>Personal Information</Text>
-            <View style={styles.formGrid}>
-              {renderFormField(
-                'First Name',
-                'first_name',
-                form.first_name,
-                editing,
-                onChange,
-              )}
-              {renderFormField(
-                'Last Name',
-                'last_name',
-                form.last_name,
-                editing,
-                onChange,
-              )}
-              {renderFormField(
-                'Username',
-                'username',
-                form.username,
-                editing,
-                onChange,
-              )}
-              {renderFormField(
-                'Email Address',
-                'email',
-                form.email,
-                editing,
-                onChange,
-                'email-address',
-              )}
-            </View>
-          </View>
-
-          {/* Business Information */}
-          <View style={styles.formSection}>
-            <Text style={styles.sectionTitle}>Business Information</Text>
-            <View style={styles.formGrid}>
-              {renderFormField(
-                'Phone Number',
-                'billing_phone',
-                form.billing_phone,
-                editing,
-                onChange,
-                'phone-pad',
-              )}
-              {renderFormField(
-                'Country',
-                'billing_country',
-                form.billing_country,
-                editing,
-                onChange,
-              )}
-              {renderFormField(
-                'Company',
-                'company',
-                form.company,
-                editing,
-                onChange,
-              )}
-              {renderFormField('Role', 'role', form.role, false, onChange)}
-            </View>
-          </View>
-
-          {/* Quick Actions */}
-          <View style={styles.actionsSection}>
-            <Text style={styles.sectionTitle}>Account Settings</Text>
-            <View style={styles.actionsList}>
-              {/* {renderActionItem(
-                'Help Circle',
-                'Help & Support',
-                'Get help and contact support',
-                '#f59e0b',
-                '#fef3c7',
-              )} */}
-            </View>
-
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleLogout}
-            >
-              <View style={styles.logoutIcon}>
-                <Icon name="log-out" size={18} color="#ef4444" />
-              </View>
-              <Text style={styles.logoutText}>Sign Out</Text>
-              <Icon name="chevron-right" size={16} color="#ef4444" />
-            </TouchableOpacity>
+        {/* Business Information */}
+        <View style={styles.formSection}>
+          <Text style={styles.sectionTitle}>
+            Business Information
+          </Text>
+          <View style={styles.formGrid}>
+            {renderFormField(
+              'Company',
+              'company',
+              form.company,
+              editing,
+              'default',
+              false,
+              100
+            )}
+            {renderFormField(
+              'Role',
+              'role',
+              form.role,
+              editing,
+              'default',
+              false,
+              50
+            )}
+            {renderFormField(
+              'Business Type',
+              'business_type',
+              form.business_type,
+              editing,
+              'default',
+              false,
+              50
+            )}
           </View>
         </View>
+
+        {/* Account Settings */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>
+            Account Settings
+          </Text>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <View style={styles.logoutIconContainer}>
+              <Icon
+                name="log-out"
+                size={scaleFont(18)}
+                color="#ef4444"
+              />
+            </View>
+            <Text style={styles.logoutText}>
+              Sign Out
+            </Text>
+            <Icon
+              name="chevron-right"
+              size={scaleFont(16)}
+              color="#ef4444"
+            />
+          </TouchableOpacity>
+        </View>
+
+        {editing && hasChanges && (
+          <View style={styles.savePrompt}>
+            <Text style={styles.savePromptText}>
+              You have unsaved changes
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       <CustomAlert
@@ -417,278 +695,158 @@ export default function ProfileScreen({ navigation }) {
         onDismiss={hideAlert}
       />
 
-      <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />
-    </View>
+      <BottomNav
+        setShowOverlay={setShowOverlay}
+        navigation={navigation}
+      />
+    </KeyboardAvoidingView>
   );
 }
 
-const renderFormField = (
-  label,
-  key,
-  value,
-  editing,
-  onChange,
-  keyboardType = 'default',
-) => (
-  <View style={styles.fieldContainer}>
-    <Text style={styles.fieldLabel}>{label}</Text>
-    {editing ? (
-      <TextInput
-        style={styles.fieldInput}
-        value={value}
-        onChangeText={text => onChange(key, text)}
-        keyboardType={keyboardType}
-        placeholder={`Enter ${label.toLowerCase()}`}
-        placeholderTextColor="#9ca3af"
-      />
-    ) : (
-      <View style={styles.fieldDisplay}>
-        <Text style={styles.fieldValue}>{value || 'Not provided'}</Text>
-      </View>
-    )}
-  </View>
-);
-
-const renderActionItem = (iconName, title, subtitle, iconColor, bgColor) => (
-  <TouchableOpacity style={styles.actionItem} key={title}>
-    <View style={[styles.actionIcon, { backgroundColor: bgColor }]}>
-      <Icon
-        name={iconName.toLowerCase().replace(' ', '-')}
-        size={20}
-        color={iconColor}
-      />
-    </View>
-    <View style={styles.actionContent}>
-      <Text style={styles.actionTitle}>{title}</Text>
-      <Text style={styles.actionSubtitle}>{subtitle}</Text>
-    </View>
-    <Icon name="chevron-right" size={16} color="#9ca3af" />
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-
-  // Loading
   loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingContent: {
-    alignItems: 'center',
-  },
   loadingText: {
-    marginTop: 16,
+    marginTop: scaleHeight(16),
     fontSize: scaleFont(16),
     color: '#6b7280',
-    fontFamily: 'Poppins-Medium',
+    fontWeight: '500',
   },
 
-  // Beautiful Header
   headerContainer: {
-    position: 'relative',
     zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: scaleHeight(2) },
+    shadowOpacity: 0.1,
+    shadowRadius: scaleHeight(4),
+    elevation: scaleHeight(4),
   },
   headerGradient: {
     backgroundColor: '#00c0a2',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop:
+      Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
     paddingBottom: scaleHeight(20),
-  },
-  headerContent: {
-    paddingHorizontal: scaleWidth(20),
   },
   headerTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: scaleHeight(10),
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    paddingHorizontal: scaleWidth(20),
+    paddingVertical: scaleHeight(12),
+    minHeight: scaleHeight(56),
   },
   backButton: {
-    width: scaleWidth(40),
-    height: scaleWidth(40),
+    padding: scaleWidth(8),
+    marginRight: scaleWidth(8),
     borderRadius: scaleWidth(20),
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: scaleWidth(16),
   },
   headerTextContainer: {
     flex: 1,
+    marginLeft: scaleWidth(8),
   },
   headerTitle: {
     fontSize: scaleFont(24),
-    fontWeight: '700',
     color: '#fff',
-    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: scaleFont(14),
     color: 'rgba(255,255,255,0.8)',
-    fontFamily: 'Poppins-Regular',
     marginTop: scaleHeight(2),
-  },
-
-  // Header Actions
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingVertical: scaleHeight(10),
-    paddingHorizontal: scaleWidth(16),
-    borderRadius: scaleWidth(25),
-    gap: scaleWidth(6),
-  },
-  editButtonText: {
-    color: '#fff',
-    fontSize: scaleFont(14),
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
   },
   editActions: {
     flexDirection: 'row',
-    gap: scaleWidth(8),
+    gap: scaleWidth(12),
   },
-  cancelButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingVertical: scaleHeight(10),
-    paddingHorizontal: scaleWidth(16),
-    borderRadius: scaleWidth(25),
-  },
-  cancelButtonText: {
-    color: '#fff',
-    fontSize: scaleFont(14),
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
-  },
-  saveButton: {
-    flexDirection: 'row',
+  actionButton: {
+    padding: scaleWidth(8),
+    borderRadius: scaleWidth(20),
+    minWidth: scaleWidth(36),
     alignItems: 'center',
-    backgroundColor: '#10b981',
-    paddingVertical: scaleHeight(10),
-    paddingHorizontal: scaleWidth(16),
-    borderRadius: scaleWidth(25),
-    gap: scaleWidth(6),
+    justifyContent: 'center',
   },
-  saveButtonDisabled: {
-    backgroundColor: '#9ca3af',
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: scaleFont(14),
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
+  disabledButton: {
+    opacity: 0.5,
   },
 
-  // Scroll View
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: scaleHeight(120),
+    paddingHorizontal: scaleWidth(20),
+    paddingTop: scaleHeight(20),
+    paddingBottom: scaleHeight(140),
   },
 
-  // Profile Card
   profileCard: {
     backgroundColor: '#fff',
-    marginHorizontal: scaleWidth(20),
-    marginTop: scaleHeight(10),
-    borderRadius: scaleWidth(20),
+    borderRadius: scaleWidth(16),
     padding: scaleWidth(24),
+    marginBottom: scaleHeight(24),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: scaleHeight(4) },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: scaleHeight(12),
-    elevation: scaleHeight(8),
+    elevation: scaleHeight(6),
   },
   avatarSection: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: scaleWidth(20),
-  },
   avatar: {
     width: scaleWidth(80),
     height: scaleWidth(80),
     borderRadius: scaleWidth(40),
-    backgroundColor: '#667eea',
+    backgroundColor: '#00c0a2',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#667eea',
+    marginRight: scaleWidth(20),
+    shadowColor: '#00c0a2',
     shadowOffset: { width: 0, height: scaleHeight(4) },
     shadowOpacity: 0.3,
     shadowRadius: scaleHeight(8),
-    elevation: scaleHeight(6),
+    elevation: scaleHeight(4),
   },
   avatarText: {
     fontSize: scaleFont(28),
-    fontWeight: '700',
     color: '#fff',
-    fontFamily: 'Poppins-Bold',
-  },
-  avatarEditButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: scaleWidth(24),
-    height: scaleWidth(24),
-    borderRadius: scaleWidth(12),
-    backgroundColor: '#10b981',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: scaleWidth(2),
-    borderColor: '#fff',
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   userInfo: {
     flex: 1,
   },
   userName: {
-    fontSize: scaleFont(20),
+    fontSize: scaleFont(22),
     fontWeight: '700',
-    color: '#111827',
-    fontFamily: 'Poppins-Bold',
+    color: '#1f2937',
     marginBottom: scaleHeight(4),
+    letterSpacing: -0.5,
   },
   userEmail: {
-    fontSize: scaleFont(14),
+    fontSize: scaleFont(15),
     color: '#6b7280',
-    fontFamily: 'Poppins-Regular',
-    marginBottom: scaleHeight(8),
+    marginBottom: scaleHeight(2),
   },
-  businessTypeBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#f0f0ff',
-    paddingHorizontal: scaleWidth(12),
-    paddingVertical: scaleHeight(6),
-    borderRadius: scaleWidth(12),
-  },
-  businessTypeText: {
-    fontSize: scaleFont(12),
+  userRole: {
+    fontSize: scaleFont(13),
+    color: '#00c0a2',
     fontWeight: '600',
-    color: '#667eea',
-    fontFamily: 'Poppins-SemiBold',
     textTransform: 'capitalize',
   },
 
-  // Forms Container
-  formsContainer: {
-    paddingHorizontal: scaleWidth(20),
-    paddingTop: scaleHeight(20),
-  },
   formSection: {
     backgroundColor: '#fff',
     borderRadius: scaleWidth(16),
     padding: scaleWidth(20),
-    marginBottom: scaleHeight(16),
+    marginBottom: scaleHeight(20),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: scaleHeight(2) },
     shadowOpacity: 0.05,
@@ -698,110 +856,91 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: scaleFont(18),
     fontWeight: '700',
-    color: '#111827',
-    fontFamily: 'Poppins-Bold',
-    marginBottom: scaleHeight(20),
+    color: '#1f2937',
+    marginBottom: scaleHeight(16),
+    letterSpacing: -0.3,
   },
   formGrid: {
     gap: scaleHeight(16),
   },
 
-  // Form Fields
   fieldContainer: {
     marginBottom: scaleHeight(4),
   },
   fieldLabel: {
-    fontSize: scaleFont(13),
+    fontSize: scaleFont(14),
     fontWeight: '600',
     color: '#374151',
-    fontFamily: 'Poppins-SemiBold',
     marginBottom: scaleHeight(8),
+    letterSpacing: -0.1,
+  },
+  requiredIndicator: {
+    color: '#ef4444',
+  },
+  inputContainer: {
+    position: 'relative',
   },
   fieldInput: {
     backgroundColor: '#f9fafb',
     borderWidth: 1,
     borderColor: '#e5e7eb',
     borderRadius: scaleWidth(12),
-    paddingVertical: scaleHeight(14),
     paddingHorizontal: scaleWidth(16),
+    paddingVertical: scaleHeight(14),
     fontSize: scaleFont(16),
-    color: '#111827',
-    fontFamily: 'Poppins-Regular',
-    minHeight: scaleHeight(50),
+    color: '#1f2937',
+    minHeight: scaleHeight(48),
+  },
+  multilineInput: {
+    minHeight: scaleHeight(80),
+    textAlignVertical: 'top',
+  },
+  disabledInput: {
+    backgroundColor: '#f3f4f6',
+    opacity: 0.6,
+  },
+  characterCount: {
+    position: 'absolute',
+    right: scaleWidth(12),
+    bottom: scaleHeight(6),
+    fontSize: scaleFont(12),
+    color: '#9ca3af',
   },
   fieldDisplay: {
     backgroundColor: '#f9fafb',
     borderRadius: scaleWidth(12),
-    paddingVertical: scaleHeight(14),
     paddingHorizontal: scaleWidth(16),
-    minHeight: scaleHeight(50),
+    paddingVertical: scaleHeight(14),
     justifyContent: 'center',
+    minHeight: scaleHeight(48),
   },
   fieldValue: {
     fontSize: scaleFont(16),
-    color: '#111827',
-    fontFamily: 'Poppins-Regular',
+    color: '#1f2937',
+  },
+  emptyValue: {
+    color: '#9ca3af',
+    fontStyle: 'italic',
   },
 
-  // Actions Section
   actionsSection: {
     backgroundColor: '#fff',
     borderRadius: scaleWidth(16),
     padding: scaleWidth(20),
-    marginBottom: scaleHeight(16),
+    marginBottom: scaleHeight(20),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: scaleHeight(2) },
     shadowOpacity: 0.05,
     shadowRadius: scaleHeight(8),
     elevation: scaleHeight(3),
   },
-  actionsList: {
-    gap: scaleHeight(4),
-    marginBottom: scaleHeight(16),
-  },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: scaleHeight(16),
-    paddingHorizontal: scaleWidth(4),
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  actionIcon: {
-    width: scaleWidth(44),
-    height: scaleWidth(44),
-    borderRadius: scaleWidth(22),
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: scaleWidth(16),
-  },
-  actionContent: {
-    flex: 1,
-  },
-  actionTitle: {
-    fontSize: scaleFont(16),
-    fontWeight: '600',
-    color: '#111827',
-    fontFamily: 'Poppins-SemiBold',
-    marginBottom: scaleHeight(2),
-  },
-  actionSubtitle: {
-    fontSize: scaleFont(13),
-    color: '#6b7280',
-    fontFamily: 'Poppins-Regular',
-  },
-
-  // Logout Button
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: scaleHeight(16),
+    paddingVertical: scaleHeight(12),
     paddingHorizontal: scaleWidth(4),
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-    marginTop: scaleHeight(8),
   },
-  logoutIcon: {
+  logoutIconContainer: {
     width: scaleWidth(44),
     height: scaleWidth(44),
     borderRadius: scaleWidth(22),
@@ -813,8 +952,23 @@ const styles = StyleSheet.create({
   logoutText: {
     flex: 1,
     fontSize: scaleFont(16),
-    fontWeight: '600',
     color: '#ef4444',
-    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+
+  savePrompt: {
+    backgroundColor: '#fef3c7',
+    borderRadius: scaleWidth(12),
+    padding: scaleWidth(16),
+    marginBottom: scaleHeight(20),
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  savePromptText: {
+    fontSize: scaleFont(14),
+    color: '#92400e',
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });

@@ -10,6 +10,7 @@ import ProfileScreen from '../screens/dashboardScreens/ProfileScreen';
 import DetailsScreen from '../screens/dashboardScreens/DetailsScreen';
 import { checkAuthStatus } from '../store/slices/authSlice';
 import SignupFlow from '../screens/authScreens/register';
+import ProductDetailsScreen from '../screens/ProductItemDetailsScreen';
 
 const Stack = createStackNavigator();
 
@@ -54,6 +55,7 @@ const LoginStack = () => {
       <Stack.Screen name="MyList" component={MyListingsScreen} />
       <Stack.Screen name="MyProfile" component={ProfileScreen} />
       <Stack.Screen name="Details" component={DetailsScreen} />
+      <Stack.Screen name="ProductDetailsById" component={ProductDetailsScreen} />
     </Stack.Navigator>
   );
 };

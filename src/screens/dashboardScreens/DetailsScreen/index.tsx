@@ -882,7 +882,7 @@ export default function DetailsScreen({ route, navigation }) {
       >
         {/* Images Section */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Equipment Images</Text>
+          <Text style={styles.sectionTitle}>Product Images</Text>
           {renderImageGallery()}
         </Animated.View>
 
@@ -1159,7 +1159,7 @@ const styles = StyleSheet.create({
   singleImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    resizeMode: 'contain',
   },
   imageGalleryContainer: {
     gap: scaleHeight(12),
@@ -1313,7 +1313,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   fieldRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: scaleWidth(12),
   },
   fieldHalf: {

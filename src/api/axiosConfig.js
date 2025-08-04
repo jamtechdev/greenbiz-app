@@ -370,7 +370,7 @@ export const apiService = {
         'Content-Type': 'multipart/form-data',
       },
     });
-},
+  },
 
   // User profile methods
   updateProfile: profileData =>
@@ -394,6 +394,8 @@ export const apiService = {
       params: { parent_id: parentId },
     });
   },
+  getProductById: id =>
+    apiClient.get(`/product/view?product_id=${id}`),
 
   getCategoryIdByName: async categoryName => {
     try {

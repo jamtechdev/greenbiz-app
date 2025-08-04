@@ -29,6 +29,7 @@
     "react-native-image-picker": "^7.2.3",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-modal": "^14.0.0-rc.1",
+    "react-native-phone-number-input": "^2.1.0",
     "react-native-reanimated": "^3.18.0",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-screens": "^4.12.0",

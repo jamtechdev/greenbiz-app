@@ -45,7 +45,7 @@ const SIZES = {
 
 interface CustomDateTimePickerProps {
   value: Date | null;
-  onChange: (datetime: Date | null) => void;
+ onChange: (isoString: string | null) => void;
   placeholder?: string;
   disabled?: boolean;
   style?: any;
@@ -78,7 +78,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
   const [selectedDate, setSelectedDate] = useState<Date | null>(value || null);
   const [selectedTime, setSelectedTime] = useState<string>('12:00 PM');
   const [activeTab, setActiveTab] = useState<'date' | 'time'>('date');
-  
+
   const modalAnimation = useRef(new Animated.Value(0)).current;
   const scaleAnimation = useRef(new Animated.Value(0.8)).current;
   const slideAnimation = useRef(new Animated.Value(50)).current;
@@ -91,7 +91,11 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
       const minutes = value.getMinutes();
       const period = hours >= 12 ? 'PM' : 'AM';
       const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-      setSelectedTime(`${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`);
+      setSelectedTime(
+        `${displayHours.toString().padStart(2, '0')}:${minutes
+          .toString()
+          .padStart(2, '0')} ${period}`,
+      );
     } else {
       setSelectedDate(null);
       setSelectedTime('12:00 PM');
@@ -103,15 +107,16 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
 
     const options: Intl.DateTimeFormatOptions = {
       year: format === 'short' ? '2-digit' : 'numeric',
-      month: format === 'short' ? 'numeric' : format === 'long' ? 'long' : 'short',
+      month:
+        format === 'short' ? 'numeric' : format === 'long' ? 'long' : 'short',
       day: 'numeric',
     };
 
     const dateStr = date.toLocaleDateString('en-US', options);
-    
+
     if (mode === 'date') return dateStr;
     if (mode === 'time') return time;
-    
+
     return `${dateStr}`;
   };
 
@@ -119,7 +124,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
     if (disabled) return;
     setVisible(true);
     setActiveTab(mode === 'time' ? 'time' : 'date');
-    
+
     Animated.parallel([
       Animated.timing(modalAnimation, {
         toValue: 1,
@@ -166,29 +171,50 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
       setVisible(false);
     });
   };
-
+  const toLocalIsoMinute = (date: Date): string => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return [
+      date.getFullYear(),
+      '-',
+      pad(date.getMonth() + 1),
+      '-',
+      pad(date.getDate()),
+      'T',
+      pad(date.getHours()),
+      ':',
+      pad(date.getMinutes()),
+    ].join('');
+  };
   const handleConfirm = () => {
+    let finalDate: Date | null = null;
+
     if (mode === 'date' && selectedDate) {
-      onChange(selectedDate);
+      finalDate = selectedDate;
     } else if (mode === 'time' && selectedTime) {
+      // build a Date today at selectedTime
       const now = new Date();
-      const [time, meridian] = selectedTime.split(' ');
-      const [hour, minute] = time.split(':').map(Number);
-      let adjustedHour = hour === 12 ? 0 : hour;
-      if (meridian === 'PM') adjustedHour += 12;
-
-      now.setHours(adjustedHour, minute, 0, 0);
-      onChange(now);
+      const [timePart, meridian] = selectedTime.split(' ');
+      let [hr, min] = timePart.split(':').map(Number);
+      if (meridian === 'PM' && hr < 12) hr += 12;
+      if (meridian === 'AM' && hr === 12) hr = 0;
+      now.setHours(hr, min, 0, 0);
+      finalDate = now;
     } else if (selectedDate && selectedTime) {
-      const [time, meridian] = selectedTime.split(' ');
-      const [hour, minute] = time.split(':').map(Number);
-      let adjustedHour = hour === 12 ? 0 : hour;
-      if (meridian === 'PM') adjustedHour += 12;
-
-      const finalDate = new Date(selectedDate);
-      finalDate.setHours(adjustedHour, minute, 0, 0);
-      onChange(finalDate);
+      // combine
+      const [timePart, meridian] = selectedTime.split(' ');
+      let [hr, min] = timePart.split(':').map(Number);
+      if (meridian === 'PM' && hr < 12) hr += 12;
+      if (meridian === 'AM' && hr === 12) hr = 0;
+      const d = new Date(selectedDate);
+      d.setHours(hr, min, 0, 0);
+      finalDate = d;
     }
+
+    if (finalDate) {
+      const isoString = toLocalIsoMinute(finalDate);
+      onChange(isoString); // <-- now "2025-07-30T09:49"
+    }
+
     hideModal();
   };
 
@@ -199,7 +225,11 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
       const minutes = value.getMinutes();
       const period = hours >= 12 ? 'PM' : 'AM';
       const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-      setSelectedTime(`${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`);
+      setSelectedTime(
+        `${displayHours.toString().padStart(2, '0')}:${minutes
+          .toString()
+          .padStart(2, '0')} ${period}`,
+      );
     }
     hideModal();
   };
@@ -217,34 +247,49 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
     const minutes = now.getMinutes();
     const period = hours >= 12 ? 'PM' : 'AM';
     const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    setSelectedTime(`${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`);
+    setSelectedTime(
+      `${displayHours.toString().padStart(2, '0')}:${minutes
+        .toString()
+        .padStart(2, '0')} ${period}`,
+    );
   };
 
-  const renderTabButton = (tab: 'date' | 'time', icon: string, title: string) => (
+  const renderTabButton = (
+    tab: 'date' | 'time',
+    icon: string,
+    title: string,
+  ) => (
     <TouchableOpacity
-      style={[
-        styles.tabButton,
-        activeTab === tab && styles.tabButtonActive
-      ]}
+      style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
       onPress={() => setActiveTab(tab)}
       activeOpacity={0.8}
     >
-      <Icon 
-        name={icon} 
-        size={20} 
-        color={activeTab === tab ? COLORS.primary : COLORS.textSecondary} 
+      <Icon
+        name={icon}
+        size={20}
+        color={activeTab === tab ? COLORS.primary : COLORS.textSecondary}
       />
-      <Text style={[
-        styles.tabButtonText,
-        activeTab === tab && styles.tabButtonTextActive
-      ]}>
+      <Text
+        style={[
+          styles.tabButtonText,
+          activeTab === tab && styles.tabButtonTextActive,
+        ]}
+      >
         {title}
       </Text>
     </TouchableOpacity>
   );
 
-  const isDateValid = selectedDate && (!minDate || selectedDate >= minDate) && (!maxDate || selectedDate <= maxDate);
-  const canConfirm = mode === 'date' ? isDateValid : mode === 'time' ? selectedTime : isDateValid && selectedTime;
+  const isDateValid =
+    selectedDate &&
+    (!minDate || selectedDate >= minDate) &&
+    (!maxDate || selectedDate <= maxDate);
+  const canConfirm =
+    mode === 'date'
+      ? isDateValid
+      : mode === 'time'
+      ? selectedTime
+      : isDateValid && selectedTime;
 
   return (
     <View style={[styles.container, style]}>
@@ -256,7 +301,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
           </Text>
         </View>
       )}
-      
+
       <TouchableOpacity
         style={[
           styles.input,
@@ -275,16 +320,18 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
             color={disabled ? COLORS.textMuted : error ? COLORS.error : COLORS.primary} 
             style={styles.inputIcon}
           /> */}
-          <Text style={[
-            styles.inputText,
-            !value && styles.inputTextPlaceholder,
-            disabled && styles.inputTextDisabled,
-            error && styles.inputTextError,
-          ]}>
+          <Text
+            style={[
+              styles.inputText,
+              !value && styles.inputTextPlaceholder,
+              disabled && styles.inputTextDisabled,
+              error && styles.inputTextError,
+            ]}
+          >
             {formatDateTime(selectedDate, selectedTime)}
           </Text>
         </View>
-        
+
         <View style={styles.inputActions}>
           {value && !disabled && (
             <TouchableOpacity
@@ -295,10 +342,10 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
               <Icon name="x" size={18} color={COLORS.textMuted} />
             </TouchableOpacity>
           )}
-          <Icon 
-            name="chevron-down" 
-            size={20} 
-            color={disabled ? COLORS.textMuted : COLORS.textSecondary} 
+          <Icon
+            name="chevron-down"
+            size={20}
+            color={disabled ? COLORS.textMuted : COLORS.textSecondary}
           />
         </View>
       </TouchableOpacity>
@@ -310,28 +357,28 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
         </View>
       )}
 
-      <Modal 
-        visible={visible} 
-        transparent 
+      <Modal
+        visible={visible}
+        transparent
         animationType="none"
         statusBarTranslucent
         onRequestClose={handleCancel}
       >
         <StatusBar backgroundColor="rgba(0,0,0,0.6)" barStyle="light-content" />
-        <Animated.View 
+        <Animated.View
           style={[
             styles.modalBackground,
             {
               opacity: modalAnimation,
-            }
+            },
           ]}
         >
-          <TouchableOpacity 
-            style={styles.modalOverlay} 
+          <TouchableOpacity
+            style={styles.modalOverlay}
             activeOpacity={1}
             onPress={handleCancel}
           >
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.pickerContainer,
                 {
@@ -339,25 +386,29 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                     { scale: scaleAnimation },
                     { translateY: slideAnimation },
                   ],
-                }
+                },
               ]}
             >
               <TouchableOpacity activeOpacity={1}>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>
-                    {mode === 'date' ? 'Select Date' : mode === 'time' ? 'Select Time' : 'Select Date & Time'}
+                    {mode === 'date'
+                      ? 'Select Date'
+                      : mode === 'time'
+                      ? 'Select Time'
+                      : 'Select Date & Time'}
                   </Text>
                   <View style={styles.headerActions}>
-                    <TouchableOpacity 
-                      onPress={setToNow} 
+                    <TouchableOpacity
+                      onPress={setToNow}
                       style={styles.nowButton}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                       <Icon name="clock" size={16} color={COLORS.primary} />
                       <Text style={styles.nowButtonText}>Now</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                      onPress={handleCancel} 
+                    <TouchableOpacity
+                      onPress={handleCancel}
                       style={styles.closeButton}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
@@ -373,12 +424,13 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                   </View>
                 )}
 
-                <ScrollView 
+                <ScrollView
                   style={styles.contentContainer}
                   showsVerticalScrollIndicator={false}
                   bounces={false}
                 >
-                  {(mode === 'date' || (mode === 'datetime' && activeTab === 'date')) && (
+                  {(mode === 'date' ||
+                    (mode === 'datetime' && activeTab === 'date')) && (
                     <View style={styles.pickerSection}>
                       <CustomDatePicker
                         value={selectedDate}
@@ -389,10 +441,11 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                     </View>
                   )}
 
-                  {(mode === 'time' || (mode === 'datetime' && activeTab === 'time')) && (
+                  {(mode === 'time' ||
+                    (mode === 'datetime' && activeTab === 'time')) && (
                     <View style={styles.pickerSection}>
-                      <TimePicker 
-                        value={selectedTime} 
+                      <TimePicker
+                        value={selectedTime}
                         onChange={setSelectedTime}
                       />
                     </View>
@@ -400,19 +453,20 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                 </ScrollView>
 
                 <View style={styles.selectedDisplay}>
-                  <Icon 
-                    name="check-circle" 
-                    size={16} 
-                    color={canConfirm ? COLORS.success : COLORS.textMuted} 
+                  <Icon
+                    name="check-circle"
+                    size={16}
+                    color={canConfirm ? COLORS.success : COLORS.textMuted}
                   />
-                  <Text style={[
-                    styles.selectedText,
-                    !canConfirm && styles.selectedTextDisabled
-                  ]}>
-                    {canConfirm 
+                  <Text
+                    style={[
+                      styles.selectedText,
+                      !canConfirm && styles.selectedTextDisabled,
+                    ]}
+                  >
+                    {canConfirm
                       ? formatDateTime(selectedDate, selectedTime)
-                      : 'Please select a valid date and time'
-                    }
+                      : 'Please select a valid date and time'}
                   </Text>
                 </View>
 
@@ -425,22 +479,24 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                     <Icon name="x" size={16} color={COLORS.textSecondary} />
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity
                     style={[
-                      styles.button, 
+                      styles.button,
                       styles.confirmButton,
-                      !canConfirm && styles.confirmButtonDisabled
+                      !canConfirm && styles.confirmButtonDisabled,
                     ]}
                     onPress={handleConfirm}
                     activeOpacity={0.8}
                     disabled={!canConfirm}
                   >
                     <Icon name="check" size={16} color={COLORS.surface} />
-                    <Text style={[
-                      styles.confirmButtonText,
-                      !canConfirm && styles.confirmButtonTextDisabled
-                    ]}>
+                    <Text
+                      style={[
+                        styles.confirmButtonText,
+                        !canConfirm && styles.confirmButtonTextDisabled,
+                      ]}
+                    >
                       Confirm
                     </Text>
                   </TouchableOpacity>
@@ -514,7 +570,7 @@ const styles = StyleSheet.create({
   },
 
   inputText: {
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.text,
     fontWeight: '500',
     flex: 1,
@@ -541,7 +597,6 @@ const styles = StyleSheet.create({
 
   clearButton: {
     padding: 2,
-    
   },
 
   errorContainer: {
