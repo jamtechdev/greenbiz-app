@@ -129,6 +129,26 @@ apiClient.interceptors.response.use(
           }
           break;
 
+        case 413:
+          if (customAlertHandlers?.showError) {
+            customAlertHandlers.showError({
+              title: 'File Too Large',
+              message:
+                'The uploaded file is too large. Please select a smaller file.',
+            });
+          }
+          break;
+
+        case 415:
+          if (customAlertHandlers?.showError) {
+            customAlertHandlers.showError({
+              title: 'Unsupported File Type',
+              message:
+                'The uploaded file type is not supported. Please select a valid image file.',
+            });
+          }
+          break;
+
         case 422:
           const validationMessage = data?.message || 'Validation failed';
           if (customAlertHandlers?.showError) {
@@ -372,10 +392,72 @@ export const apiService = {
     });
   },
 
-  // User profile methods
-  updateProfile: profileData =>
-    apiService.post('/user-profile/update', profileData),
+  // Alternative method specifically for profile picture upload
+  updateProfileWithImage: async profileData => {
+    try {
+      console.log('📤 Updating profile with image...');
+
+      const token = await AsyncStorage.getItem('userToken');
+
+      const response = await apiClient.post(
+        '/user-profile/update',
+        profileData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Accept: 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          timeout: 120000, // 2 minutes for file upload
+        },
+      );
+
+      return response;
+    } catch (error) {
+      console.error('❌ Error in updateProfileWithImage:', error);
+      throw error;
+    }
+  },
+
   getUser: () => apiService.get('/user-profile'),
+  updateProfile: async (profileData, config = {}) => {
+    try {
+      const isFormData = profileData instanceof FormData;
+
+      console.log('📡 API: Sending profile update request...');
+      console.log('Is FormData:', isFormData);
+
+      const response = await apiClient.post(
+        '/user-profile/update',
+        profileData,
+        {
+          ...config,
+          headers: {
+            ...config.headers,
+            ...(isFormData && {
+              'Content-Type': 'multipart/form-data',
+              Accept: 'application/json',
+            }),
+          },
+          timeout: isFormData ? 120000 : 30000,
+        },
+      );
+
+      console.log(
+        '📨 API: Response received:',
+        response.status,
+        response.data?.success,
+      );
+      return response;
+    } catch (error) {
+      console.error(
+        '🚨 API: Error in updateProfile:',
+        error.response?.status,
+        error.response?.data,
+      );
+      throw error;
+    }
+  },
 
   // Product methods
   getProducts: (params = {}) => apiService.get('/products', { params }),
@@ -394,8 +476,7 @@ export const apiService = {
       params: { parent_id: parentId },
     });
   },
-  getProductById: id =>
-    apiClient.get(`/product/view?product_id=${id}`),
+  getProductById: id => apiClient.post(`/product/view?product_id=${id}`),
 
   getCategoryIdByName: async categoryName => {
     try {
@@ -412,7 +493,7 @@ export const apiService = {
       return null;
     }
   },
-
+  deleteListing: id => apiClient.post(`/product/delete?product_id=${id}`),
   // Location methods
   getLocations: () => apiService.get('/locations'),
 

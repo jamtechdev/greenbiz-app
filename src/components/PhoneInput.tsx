@@ -40,6 +40,7 @@ export interface PhoneInputProps {
   autoFocus?: boolean;
   maxLength?: number;
   testID?: string;
+  showCountryName?: boolean;
 }
 
 const COUNTRY_CODES: CountryCode[] = [
@@ -66,6 +67,8 @@ const COUNTRY_CODES: CountryCode[] = [
   { code: '+886', country: 'Taiwan',      flag: '🇹🇼' },
   { code: '+66',  country: 'Thailand',    flag: '🇹🇭' },
   { code: '+84',  country: 'Vietnam',     flag: '🇻🇳' },
+  { code: '+44',  country: 'United Kingdom', flag: '🇬🇧' },
+  { code: '+1',   country: 'United States', flag: '🇺🇸' },
 ];
 
 const PhoneInput: React.FC<PhoneInputProps> = ({
@@ -87,13 +90,15 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   autoFocus = false,
   maxLength,
   testID,
+  showCountryName = true,
 }) => {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
 
   // Currently selected entry (fallback to Australia)
-  const selected =
-    COUNTRY_CODES.find(c => c.code === countryCode) || COUNTRY_CODES[1];
+  const selected = useMemo(() => {
+    return COUNTRY_CODES.find(c => c.code === countryCode) || COUNTRY_CODES[1];
+  }, [countryCode]);
 
   // Filter list by code or country name
   const filtered = useMemo(
@@ -115,10 +120,57 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
         setSearchText('');
       }}
     >
-      <Text style={styles.optionText}>
-        {item.flag} {item.code}
-      </Text>
+      <View style={styles.optionContent}>
+        <Text style={styles.optionFlag}>{item.flag}</Text>
+        <View style={styles.optionTextContainer}>
+          <Text style={styles.optionCountry}>{item.country}</Text>
+          <Text style={styles.optionCode}>{item.code}</Text>
+        </View>
+      </View>
     </TouchableOpacity>
+  );
+
+  // For display mode (when disabled/not editing)
+  const renderDisplayMode = () => {
+    const displayValue = phoneNumber 
+      ? `${selected.flag} ${selected.code} ${phoneNumber}`
+      : 'Not provided';
+    
+    return (
+      <View style={[styles.displayContainer, inputStyle]}>
+        <Text style={[styles.displayText, !phoneNumber && styles.emptyDisplayText]}>
+          {displayValue}
+        </Text>
+      </View>
+    );
+  };
+
+  // For edit mode
+  const renderEditMode = () => (
+    <View style={[styles.row, inputStyle]}>
+      <TouchableOpacity
+        style={[styles.codeButton, disabled && styles.disabledButton]}
+        onPress={() => !disabled && setPickerVisible(true)}
+        disabled={disabled}
+      >
+        <View style={styles.codeButtonContent}>
+          <Text style={styles.codeButtonFlag}>{selected.flag}</Text>
+          <Text style={styles.codeButtonCode}>{selected.code}</Text>
+        </View>
+      </TouchableOpacity>
+
+      <TextInput
+        style={[styles.input, disabled && styles.disabledInput]}
+        value={phoneNumber}
+        onChangeText={onPhoneNumberChange}
+        placeholder={placeholder}
+        placeholderTextColor="#9ca3af"
+        keyboardType={keyboardType}
+        autoFocus={autoFocus}
+        maxLength={maxLength}
+        editable={!disabled}
+      />
+    </View>
   );
 
   return (
@@ -130,28 +182,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
         </Text>
       )}
 
-      <View style={[styles.row, inputStyle]}>
-        <TouchableOpacity
-          style={[styles.codeButton, disabled && styles.disabled]}
-          onPress={() => !disabled && setPickerVisible(true)}
-        >
-          <Text style={styles.codeText}>
-            {selected.flag} {selected.code}
-          </Text>
-        </TouchableOpacity>
-
-        <TextInput
-          style={[styles.input, disabled && styles.disabled]}
-          value={phoneNumber}
-          onChangeText={onPhoneNumberChange}
-          placeholder={placeholder}
-          placeholderTextColor="#9ca3af"
-          keyboardType={keyboardType}
-          autoFocus={autoFocus}
-          maxLength={maxLength}
-          editable={!disabled}
-        />
-      </View>
+      {disabled ? renderDisplayMode() : renderEditMode()}
 
       {error ? <Text style={[styles.errorText, errorStyle]}>{error}</Text> : null}
 
@@ -166,7 +197,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
         <SafeAreaView style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Code</Text>
+            <Text style={styles.modalTitle}>Select Country</Text>
             <TouchableOpacity
               onPress={() => {
                 setPickerVisible(false);
@@ -191,7 +222,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
           {/* List */}
           <FlatList
             data={filtered}
-            keyExtractor={item => item.code}
+            keyExtractor={(item, index) => `${item.code}-${item.country}-${index}`}
             renderItem={renderOption}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             keyboardShouldPersistTaps="handled"
@@ -226,7 +257,7 @@ export const validatePhoneNumber = (
 };
 
 /**
- * Named export helper to build the full phone number for your API
+ * Named export helper to build the complete phone number for your API
  */
 export const getCompletePhoneNumber = (
   countryCode: string,
@@ -236,46 +267,97 @@ export const getCompletePhoneNumber = (
 };
 
 const styles = StyleSheet.create({
-  container: { marginBottom: scale(16) },
+  container: { 
+    marginBottom: scale(16) 
+  },
 
   label: {
-    fontSize: scaleFont(15),
+    fontSize: scaleFont(14),
     fontWeight: '600',
     color: '#374151',
     marginBottom: scale(8),
+    letterSpacing: -0.1,
   },
-  required: { color: '#ef4444' },
+  required: { 
+    color: '#ef4444' 
+  },
 
+  // Display mode (when disabled/not editing)
+  displayContainer: {
+    backgroundColor: '#f9fafb',
+    borderRadius: scale(12),
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(14),
+    justifyContent: 'center',
+    minHeight: scaleHeight(48),
+  },
+  displayText: {
+    fontSize: scaleFont(16),
+    color: '#1f2937',
+  },
+  emptyDisplayText: {
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+
+  // Edit mode
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: scale(8),
   },
+  
   codeButton: {
-    width: scale(80),
-    height: scaleHeight(52),
+    width: scale(65),
+    height: scaleHeight(48),
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: '#e5e7eb',
     borderRadius: scale(12),
+    backgroundColor: '#f9fafb',
+    paddingHorizontal: scale(4),
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'white',
   },
-  codeText: { fontSize: scaleFont(16) },
+  
+  disabledButton: {
+    backgroundColor: '#f3f4f6',
+    opacity: 0.6,
+  },
+  
+  codeButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(2),
+  },
+  
+  codeButtonFlag: {
+    fontSize: scaleFont(14),
+  },
+  
+  codeButtonCode: {
+    fontSize: scaleFont(12),
+    color: '#1f2937',
+    fontWeight: '600',
+  },
 
   input: {
     flex: 1,
-    height: scaleHeight(52),
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: '#e5e7eb',
     borderRadius: scale(12),
     paddingHorizontal: scale(16),
+    paddingVertical: scale(14),
     fontSize: scaleFont(16),
-    backgroundColor: 'white',
     color: '#1f2937',
+    minHeight: scaleHeight(48),
   },
 
-  disabled: { backgroundColor: '#f3f4f6', opacity: 0.6 },
+  disabledInput: {
+    backgroundColor: '#f3f4f6',
+    opacity: 0.6,
+  },
 
   errorText: {
     fontSize: scaleFont(12),
@@ -285,7 +367,11 @@ const styles = StyleSheet.create({
   },
 
   /** Modal styles **/
-  modalContainer: { flex: 1, backgroundColor: 'white' },
+  modalContainer: { 
+    flex: 1, 
+    backgroundColor: 'white' 
+  },
+  
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -293,16 +379,29 @@ const styles = StyleSheet.create({
     padding: scale(16),
     borderBottomWidth: 1,
     borderColor: '#eee',
+    backgroundColor: '#f8fafc',
   },
-  modalTitle: { fontSize: scaleFont(18), fontWeight: '600' },
-  closeButton: { fontSize: scaleFont(24), color: '#888' },
+  
+  modalTitle: { 
+    fontSize: scaleFont(18), 
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  
+  closeButton: { 
+    fontSize: scaleFont(24), 
+    color: '#6b7280',
+    fontWeight: '300',
+  },
 
   searchContainer: {
     paddingHorizontal: scale(16),
-    paddingVertical: scale(8),
+    paddingVertical: scale(12),
     borderBottomWidth: 1,
     borderColor: '#eee',
+    backgroundColor: '#f8fafc',
   },
+  
   searchInput: {
     height: scaleHeight(40),
     borderWidth: 1,
@@ -310,16 +409,45 @@ const styles = StyleSheet.create({
     borderRadius: scale(8),
     paddingHorizontal: scale(12),
     fontSize: scaleFont(14),
+    backgroundColor: 'white',
   },
 
   option: {
-    paddingVertical: scale(12),
+    paddingVertical: scale(16),
     paddingHorizontal: scale(16),
   },
-  optionText: { fontSize: scaleFont(16) },
+  
+  optionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(12),
+  },
+  
+  optionFlag: {
+    fontSize: scaleFont(20),
+    width: scale(28),
+    textAlign: 'center',
+  },
+  
+  optionTextContainer: {
+    flex: 1,
+  },
+  
+  optionCountry: {
+    fontSize: scaleFont(16),
+    color: '#1f2937',
+    fontWeight: '500',
+    marginBottom: scale(2),
+  },
+  
+  optionCode: {
+    fontSize: scaleFont(14),
+    color: '#6b7280',
+  },
 
   separator: {
     height: 1,
     backgroundColor: '#f0f0f0',
+    marginLeft: scale(50),
   },
 });

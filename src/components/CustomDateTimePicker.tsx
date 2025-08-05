@@ -45,7 +45,7 @@ const SIZES = {
 
 interface CustomDateTimePickerProps {
   value: Date | null;
- onChange: (isoString: string | null) => void;
+  onChange: (isoString: string | null) => void;
   placeholder?: string;
   disabled?: boolean;
   style?: any;
@@ -62,7 +62,7 @@ interface CustomDateTimePickerProps {
 const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
   value,
   onChange,
-  placeholder = 'date & time',
+  placeholder = 'Select date & time',
   disabled = false,
   style,
   minDate,
@@ -85,7 +85,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
 
   // Initialize time from value
   useEffect(() => {
-    if (value) {
+    if (value && value instanceof Date && !isNaN(value.getTime())) {
       setSelectedDate(value);
       const hours = value.getHours();
       const minutes = value.getMinutes();
@@ -103,21 +103,28 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
   }, [value]);
 
   const formatDateTime = (date: Date | null, time: string): string => {
-    if (!date) return placeholder;
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      return placeholder;
+    }
 
-    const options: Intl.DateTimeFormatOptions = {
-      year: format === 'short' ? '2-digit' : 'numeric',
-      month:
-        format === 'short' ? 'numeric' : format === 'long' ? 'long' : 'short',
-      day: 'numeric',
-    };
+    try {
+      const options: Intl.DateTimeFormatOptions = {
+        year: format === 'short' ? '2-digit' : 'numeric',
+        month:
+          format === 'short' ? 'numeric' : format === 'long' ? 'long' : 'short',
+        day: 'numeric',
+      };
 
-    const dateStr = date.toLocaleDateString('en-US', options);
+      const dateStr = date.toLocaleDateString('en-US', options);
 
-    if (mode === 'date') return dateStr;
-    if (mode === 'time') return time;
+      if (mode === 'date') return dateStr;
+      if (mode === 'time') return time;
 
-    return `${dateStr}`;
+      return `${dateStr} ${time}`;
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return placeholder;
+    }
   };
 
   const showModal = () => {
@@ -171,48 +178,74 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
       setVisible(false);
     });
   };
-  const toLocalIsoMinute = (date: Date): string => {
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    return [
-      date.getFullYear(),
-      '-',
-      pad(date.getMonth() + 1),
-      '-',
-      pad(date.getDate()),
-      'T',
-      pad(date.getHours()),
-      ':',
-      pad(date.getMinutes()),
-    ].join('');
-  };
-  const handleConfirm = () => {
-    let finalDate: Date | null = null;
 
-    if (mode === 'date' && selectedDate) {
-      finalDate = selectedDate;
-    } else if (mode === 'time' && selectedTime) {
-      // build a Date today at selectedTime
-      const now = new Date();
-      const [timePart, meridian] = selectedTime.split(' ');
-      let [hr, min] = timePart.split(':').map(Number);
-      if (meridian === 'PM' && hr < 12) hr += 12;
-      if (meridian === 'AM' && hr === 12) hr = 0;
-      now.setHours(hr, min, 0, 0);
-      finalDate = now;
-    } else if (selectedDate && selectedTime) {
-      // combine
-      const [timePart, meridian] = selectedTime.split(' ');
-      let [hr, min] = timePart.split(':').map(Number);
-      if (meridian === 'PM' && hr < 12) hr += 12;
-      if (meridian === 'AM' && hr === 12) hr = 0;
-      const d = new Date(selectedDate);
-      d.setHours(hr, min, 0, 0);
-      finalDate = d;
+  // Safe ISO string conversion
+  const toSafeISOString = (date: Date): string | null => {
+    try {
+      if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+        return null;
+      }
+      return date.toISOString();
+    } catch (error) {
+      console.error('Error converting to ISO string:', error);
+      return null;
     }
+  };
 
-    if (finalDate) {
-      const isoString = toLocalIsoMinute(finalDate);
-      onChange(isoString); // <-- now "2025-07-30T09:49"
+  // Parse time string to hours and minutes
+  const parseTimeString = (timeStr: string): { hours: number; minutes: number } => {
+    try {
+      const [timePart, meridian] = timeStr.split(' ');
+      let [hr, min] = timePart.split(':').map(Number);
+      
+      // Validate parsed values
+      if (isNaN(hr) || isNaN(min)) {
+        return { hours: 12, minutes: 0 };
+      }
+      
+      if (meridian === 'PM' && hr < 12) hr += 12;
+      if (meridian === 'AM' && hr === 12) hr = 0;
+      
+      return { hours: hr, minutes: min };
+    } catch (error) {
+      console.error('Error parsing time string:', error);
+      return { hours: 12, minutes: 0 };
+    }
+  };
+
+  const handleConfirm = () => {
+    try {
+      let finalDate: Date | null = null;
+
+      if (mode === 'date' && selectedDate) {
+        finalDate = new Date(selectedDate);
+      } else if (mode === 'time' && selectedTime) {
+        // Build a Date today at selectedTime
+        const now = new Date();
+        const { hours, minutes } = parseTimeString(selectedTime);
+        now.setHours(hours, minutes, 0, 0);
+        finalDate = now;
+      } else if (selectedDate && selectedTime) {
+        // Combine date and time
+        const { hours, minutes } = parseTimeString(selectedTime);
+        finalDate = new Date(selectedDate);
+        finalDate.setHours(hours, minutes, 0, 0);
+      }
+
+      if (finalDate && !isNaN(finalDate.getTime())) {
+        const isoString = toSafeISOString(finalDate);
+        if (isoString) {
+          onChange(isoString);
+        } else {
+          console.error('Failed to convert date to ISO string');
+          onChange(null);
+        }
+      } else {
+        onChange(null);
+      }
+    } catch (error) {
+      console.error('Error in handleConfirm:', error);
+      onChange(null);
     }
 
     hideModal();
@@ -220,7 +253,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
 
   const handleCancel = () => {
     setSelectedDate(value);
-    if (value) {
+    if (value && value instanceof Date && !isNaN(value.getTime())) {
       const hours = value.getHours();
       const minutes = value.getMinutes();
       const period = hours >= 12 ? 'PM' : 'AM';
@@ -241,17 +274,21 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
   };
 
   const setToNow = () => {
-    const now = new Date();
-    setSelectedDate(now);
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    setSelectedTime(
-      `${displayHours.toString().padStart(2, '0')}:${minutes
-        .toString()
-        .padStart(2, '0')} ${period}`,
-    );
+    try {
+      const now = new Date();
+      setSelectedDate(now);
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      setSelectedTime(
+        `${displayHours.toString().padStart(2, '0')}:${minutes
+          .toString()
+          .padStart(2, '0')} ${period}`,
+      );
+    } catch (error) {
+      console.error('Error setting to now:', error);
+    }
   };
 
   const renderTabButton = (
@@ -282,8 +319,11 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
 
   const isDateValid =
     selectedDate &&
+    selectedDate instanceof Date &&
+    !isNaN(selectedDate.getTime()) &&
     (!minDate || selectedDate >= minDate) &&
     (!maxDate || selectedDate <= maxDate);
+
   const canConfirm =
     mode === 'date'
       ? isDateValid
@@ -314,12 +354,12 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
         disabled={disabled}
       >
         <View style={styles.inputContent}>
-          {/* <Icon 
+          <Icon 
             name={mode === 'time' ? 'clock' : mode === 'date' ? 'calendar' : 'calendar'} 
             size={22} 
             color={disabled ? COLORS.textMuted : error ? COLORS.error : COLORS.primary} 
             style={styles.inputIcon}
-          /> */}
+          />
           <Text
             style={[
               styles.inputText,

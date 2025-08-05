@@ -173,6 +173,7 @@ export default function DetailsScreen({ route, navigation }) {
         co2_emission: { value: '', editing: false },
         product_cat: { value: '', editing: false },
         subcategory: { value: '', editing: false },
+        form_type: { value: '', editing: false },
       };
     }
 
@@ -342,7 +343,7 @@ export default function DetailsScreen({ route, navigation }) {
       });
     }
   };
-  const handleSubmitListing = async () => {
+ const handleSubmitListing = async (formType) => {
     try {
       // Ensure product_title is provided
       if (!fields.name.value) {
@@ -387,6 +388,8 @@ export default function DetailsScreen({ route, navigation }) {
         'product_type',
         (fields.product_type?.value || 'Marketplace').toLowerCase(),
       );
+      formData.append('form_type', formType);
+      // formData.append('form_type',fields?.form_type?.value ||"save_later")
       formData.append('currency', fields.currency?.value || 'USD');
 
       // Handle images - Use consistent field naming
@@ -512,7 +515,7 @@ export default function DetailsScreen({ route, navigation }) {
       const response = await apiService.submitProduct(formData);
 
       // console.log('✅ Submission successful:', response.data);
-      setIsSubmitting(false);
+      setIsSubmitting(false); 
 
       if (response.data) {
         showSuccess({
@@ -1033,10 +1036,9 @@ export default function DetailsScreen({ route, navigation }) {
         showReviewModal={showReviewModal}
         setShowReviewModal={setShowReviewModal}
         onChangeText={onChangeText}
-        handleContinueToSubmit={() => {
-          const token = userToken;
-          if (token) {
-            handleSubmitListing(token);
+        handleContinueToSubmit={formType => {
+          if (userToken) {
+            handleSubmitListing(formType);
           }
         }}
         mediaFiles={mediaFiles}

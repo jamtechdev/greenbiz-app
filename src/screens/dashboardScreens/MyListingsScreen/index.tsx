@@ -21,17 +21,19 @@ import { useAppContext } from '../../../_customContext/AppProvider';
 import { apiService } from '../../../api/axiosConfig';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
 import { useSelector } from 'react-redux';
+import CustomAlert from '../../../components/CustomAlert';
 
 const { width, height } = Dimensions.get('window');
 
 export default function MyListingsScreen({ navigation }) {
   const { showOverlay, setShowOverlay } = useAppContext();
-  const { showConfirm, showError, showSuccess } = useCustomAlert();
+  const {alertConfig, showConfirm, showError, showSuccess,hideAlert } = useCustomAlert();
 
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [stats, setStats] = useState({
     published: 0,
     pending: 0,
@@ -137,16 +139,13 @@ export default function MyListingsScreen({ navigation }) {
   const handleViewDetails = listing => {
     setActiveMenuId(null);
     // Navigate to listing details screen
-    navigation.navigate('ListingDetails', {
-      listingId: listing.ID,
-      listing: listing,
-    });
+    navigation.navigate('ProductDetailsById', { productId: listing.ID });
   };
 
   const handleEditListing = listing => {
     setActiveMenuId(null);
     // Navigate to edit screen
-    navigation.navigate('EditListing', {
+    navigation.navigate('editProductscreen', {
       listingId: listing.ID,
       listing: listing,
     });
@@ -154,7 +153,9 @@ export default function MyListingsScreen({ navigation }) {
 
   const handleDeleteListing = listing => {
     setActiveMenuId(null);
-
+    
+    console.log('🗑️ Attempting to delete listing:', listing.ID, listing.title);
+    
     showConfirm({
       title: 'Delete Listing',
       message: `Are you sure you want to delete "${listing.title}"? This action cannot be undone.`,
@@ -162,24 +163,56 @@ export default function MyListingsScreen({ navigation }) {
       destructive: true,
       onConfirm: async () => {
         try {
-          console.log('🗑️ Deleting listing:', listing.ID);
-
-          await apiService.deleteListing(listing.ID);
-
-          showSuccess({
-            title: 'Listing Deleted',
-            message: 'Your listing has been successfully deleted.',
-            onPress: () => {
-              // Refresh the listings after successful deletion
-              fetchListings();
-            },
-          });
+          setDeleting(true);
+          console.log('🔥 Deleting listing with ID:', listing.ID);
+          
+          // Call the delete API
+          const response = await apiService.deleteListing(listing.ID);
+          
+          console.log('✅ Delete response:', response);
+          
+          // Check if the deletion was successful
+          if (response.data && response.data.success) {
+            showSuccess({
+              title: 'Listing Deleted',
+              message: 'Your listing has been successfully deleted.',
+              onPress: () => {
+                // Refresh the listings after successful deletion
+                fetchListings();
+              },
+            });
+            
+            // Also refresh immediately without waiting for user to close alert
+            fetchListings();
+          } else {
+            throw new Error(response.data?.message || 'Delete failed');
+          }
+          
         } catch (error) {
           console.error('❌ Error deleting listing:', error);
+          
+          // More detailed error handling
+          let errorMessage = 'Unable to delete the listing. Please try again.';
+          
+          if (error.response) {
+            // Server responded with error status
+            errorMessage = error.response.data?.message || errorMessage;
+            console.error('Server error:', error.response.status, error.response.data);
+          } else if (error.request) {
+            // Network error
+            errorMessage = 'Network error. Please check your connection and try again.';
+            console.error('Network error:', error.request);
+          } else {
+            // Other error
+            console.error('Error:', error.message);
+          }
+          
           showError({
             title: 'Delete Failed',
-            message: 'Unable to delete the listing. Please try again.',
+            message: errorMessage,
           });
+        } finally {
+          setDeleting(false);
         }
       },
     });
@@ -525,6 +558,16 @@ export default function MyListingsScreen({ navigation }) {
           )}
         </View>
       </ScrollView>
+        <CustomAlert
+            visible={alertConfig.visible}
+            title={alertConfig.title}
+            message={alertConfig.message}
+            buttons={alertConfig.buttons}
+            showCancel={alertConfig.showCancel}
+            cancelText={alertConfig.cancelText}
+            vibrate={alertConfig.vibrate}
+            onDismiss={hideAlert}
+          />
 
       <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />
 
@@ -586,15 +629,21 @@ export default function MyListingsScreen({ navigation }) {
               currentListing && handleDeleteListing(currentListing)
             }
             activeOpacity={0.7}
+            disabled={deleting}
           >
             <View
               style={[styles.menuIconContainer, { backgroundColor: '#fee2e2' }]}
             >
-              <Icon name="trash-2" size={18} color="#dc2626" />
+              {deleting ? (
+                <ActivityIndicator size={18} color="#dc2626" />
+              ) : (
+                <Icon name="trash-2" size={18} color="#dc2626" />
+              )}
             </View>
+            
             <View style={styles.menuTextContainer}>
               <Text style={[styles.menuText, { color: '#dc2626' }]}>
-                Delete Listing
+                {deleting ? 'Deleting...' : 'Delete Listing'}
               </Text>
               <Text style={styles.menuSubtext}>
                 Permanently remove this listing
@@ -925,6 +974,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+ tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,

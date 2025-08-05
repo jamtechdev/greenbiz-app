@@ -11,6 +11,7 @@ import DetailsScreen from '../screens/dashboardScreens/DetailsScreen';
 import { checkAuthStatus } from '../store/slices/authSlice';
 import SignupFlow from '../screens/authScreens/register';
 import ProductDetailsScreen from '../screens/ProductItemDetailsScreen';
+import EditProductScreen from '../screens/EditProductScreen/EditPorductScreen';
 
 const Stack = createStackNavigator();
 
@@ -56,6 +57,7 @@ const LoginStack = () => {
       <Stack.Screen name="MyProfile" component={ProfileScreen} />
       <Stack.Screen name="Details" component={DetailsScreen} />
       <Stack.Screen name="ProductDetailsById" component={ProductDetailsScreen} />
+      <Stack.Screen name="editProductscreen" component={EditProductScreen} />
     </Stack.Navigator>
   );
 };

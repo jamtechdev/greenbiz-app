@@ -45,15 +45,17 @@ export default function DetailModal({
   const [loadingAuctionGroups, setLoadingAuctionGroups] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionType, setSubmissionType] = useState(''); // Track which button was clicked
   const [customAuctionGroup, setCustomAuctionGroup] = useState('');
   const [showCustomAuctionGroup, setShowCustomAuctionGroup] = useState(false);
-  
+
   // Local media files state (fallback if not provided via props)
   const [localMediaFiles, setLocalMediaFiles] = useState([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
 
   // Use provided media files or local state
-  const currentMediaFiles = mediaFiles.length >= 0 ? mediaFiles : localMediaFiles;
+  const currentMediaFiles =
+    mediaFiles.length >= 0 ? mediaFiles : localMediaFiles;
   const handleMediaFilesChange = onMediaFilesChange || setLocalMediaFiles;
 
   // Fetch data when modal opens
@@ -74,11 +76,11 @@ export default function DetailModal({
     }
   }, [selectedCategoryId]);
 
-  // Validation rules
-  const validateFields = () => {
+  // Validation rules based on form type
+  const validateFields = formType => {
     const errors = {};
 
-    // Required fields validation
+    // Common required fields for all types
     if (!fields.name?.value?.trim()) {
       errors.name = 'Product title is required';
     }
@@ -87,22 +89,34 @@ export default function DetailModal({
       errors.equipment_description = 'Product description is required';
     }
 
-    if (!fields.original_price?.value || parseFloat(fields.original_price.value) <= 0) {
-      errors.original_price = 'Valid price is required';
+    // Price validation - not required for save_later
+    if (formType !== 'save_later') {
+      if (
+        !fields.original_price?.value ||
+        parseFloat(fields.original_price.value) <= 0
+      ) {
+        errors.original_price = 'Valid price is required';
+      }
     }
 
-    // Category validation - check both possible field names
-    const categoryValue = fields.parent_category?.value || fields.product_cat?.value;
-    if (!categoryValue) {
-      errors.parent_category = 'Category is required';
+    // Category validation - not required for save_later
+    if (formType !== 'save_later') {
+      const categoryValue =
+        fields.parent_category?.value || fields.product_cat?.value;
+      if (!categoryValue) {
+        errors.parent_category = 'Category is required';
+      }
+
+      if (!fields.item_location?.value) {
+        errors.item_location = 'Location is required';
+      }
     }
 
-    if (!fields.item_location?.value) {
-      errors.item_location = 'Location is required';
-    }
-
-    // Auction-specific validation
-    if (productType === 'Auction') {
+    // Auction-specific validation - only for submit_auction
+    if (
+      formType === 'submit_auction' ||
+      (formType !== 'save_later' && productType === 'Auction')
+    ) {
       if (!fields.auction_start_date?.value) {
         errors.auction_start_date = 'Start date is required for auctions';
       }
@@ -125,12 +139,20 @@ export default function DetailModal({
         }
       }
 
-      if (!fields.auction_start_price?.value || parseFloat(fields.auction_start_price.value) <= 0) {
+      if (
+        !fields.auction_start_price?.value ||
+        parseFloat(fields.auction_start_price.value) <= 0
+      ) {
         errors.auction_start_price = 'Valid starting bid price is required';
       }
 
-      if (fields.reserve_price?.value && parseFloat(fields.reserve_price.value) < parseFloat(fields.auction_start_price?.value || 0)) {
-        errors.reserve_price = 'Reserve price must be higher than starting bid price';
+      if (
+        fields.reserve_price?.value &&
+        parseFloat(fields.reserve_price.value) <
+          parseFloat(fields.auction_start_price?.value || 0)
+      ) {
+        errors.reserve_price =
+          'Reserve price must be higher than starting bid price';
       }
 
       if (!fields.auction_currency?.value) {
@@ -155,36 +177,44 @@ export default function DetailModal({
     try {
       setLoadingCategories(true);
       const response = await apiService.getCategories();
-      
+
       console.log('Categories API Response:', response.data);
 
       if (response.data) {
-        const categoryList = Array.isArray(response.data) ? 
-          response.data : 
-          (response.data.categories || response.data.data || []);
-        
+        const categoryList = Array.isArray(response.data)
+          ? response.data
+          : response.data.categories || response.data.data || [];
+
         const categoryOptions = categoryList.map(category => {
           if (typeof category === 'string') {
             return { name: category, id: null };
           }
           return {
-            name: category.name || category.label || category.title || String(category),
-            id: category.id || category.term_id || category.ID || null
+            name:
+              category.name ||
+              category.label ||
+              category.title ||
+              String(category),
+            id: category.id || category.term_id || category.ID || null,
           };
         });
 
-        setCategories(categoryOptions.length > 0 ? categoryOptions : [
-          { name: 'Electronics', id: null },
-          { name: 'Computers', id: null },
-          { name: 'Mobiles', id: null },
-          { name: 'Accessories', id: null },
-          { name: 'Machinery', id: null },
-          { name: 'Industrial Equipment', id: null },
-          { name: 'Automotive', id: null },
-          { name: 'Construction Equipment', id: null },
-          { name: 'Agricultural Equipment', id: null },
-          { name: 'Other', id: null }
-        ]);
+        setCategories(
+          categoryOptions.length > 0
+            ? categoryOptions
+            : [
+                { name: 'Electronics', id: null },
+                { name: 'Computers', id: null },
+                { name: 'Mobiles', id: null },
+                { name: 'Accessories', id: null },
+                { name: 'Machinery', id: null },
+                { name: 'Industrial Equipment', id: null },
+                { name: 'Automotive', id: null },
+                { name: 'Construction Equipment', id: null },
+                { name: 'Agricultural Equipment', id: null },
+                { name: 'Other', id: null },
+              ],
+        );
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -198,14 +228,14 @@ export default function DetailModal({
         { name: 'Automotive', id: null },
         { name: 'Construction Equipment', id: null },
         { name: 'Agricultural Equipment', id: null },
-        { name: 'Other', id: null }
+        { name: 'Other', id: null },
       ]);
     } finally {
       setLoadingCategories(false);
     }
   };
 
-  const fetchSubCategories = async (parentId) => {
+  const fetchSubCategories = async parentId => {
     if (!parentId) {
       setSubCategories([]);
       return;
@@ -214,19 +244,24 @@ export default function DetailModal({
     try {
       setLoadingSubCategories(true);
       const response = await apiService.getSubCategories(parentId);
-      
+
       console.log('SubCategories API Response:', response.data);
 
       if (response.data) {
-        const subCategoryList = Array.isArray(response.data) ? 
-          response.data : 
-          (response.data.subcategories || response.data.data || []);
-        
+        const subCategoryList = Array.isArray(response.data)
+          ? response.data
+          : response.data.subcategories || response.data.data || [];
+
         const subCategoryOptions = subCategoryList.map(subCategory => {
           if (typeof subCategory === 'string') {
             return subCategory;
           }
-          return subCategory.name || subCategory.label || subCategory.title || String(subCategory);
+          return (
+            subCategory.name ||
+            subCategory.label ||
+            subCategory.title ||
+            String(subCategory)
+          );
         });
 
         setSubCategories(subCategoryOptions);
@@ -236,14 +271,32 @@ export default function DetailModal({
       // Fallback subcategories based on parent category name
       const selectedCategory = categories.find(cat => cat.id === parentId);
       const categoryName = selectedCategory?.name || '';
-      
+
       const fallbackSubCategories = {
-        'Electronics': ['Smartphones', 'Laptops', 'Tablets', 'Audio Equipment', 'Gaming Consoles'],
-        'Machinery': ['Heavy Machinery', 'Manufacturing Equipment', 'Power Tools', 'Generators'],
-        'Automotive': ['Cars', 'Motorcycles', 'Trucks', 'Parts & Accessories'],
-        'Construction Equipment': ['Excavators', 'Bulldozers', 'Cranes', 'Concrete Mixers'],
+        Electronics: [
+          'Smartphones',
+          'Laptops',
+          'Tablets',
+          'Audio Equipment',
+          'Gaming Consoles',
+        ],
+        Machinery: [
+          'Heavy Machinery',
+          'Manufacturing Equipment',
+          'Power Tools',
+          'Generators',
+        ],
+        Automotive: ['Cars', 'Motorcycles', 'Trucks', 'Parts & Accessories'],
+        'Construction Equipment': [
+          'Excavators',
+          'Bulldozers',
+          'Cranes',
+          'Concrete Mixers',
+        ],
       };
-      setSubCategories(fallbackSubCategories[categoryName] || ['General', 'Other']);
+      setSubCategories(
+        fallbackSubCategories[categoryName] || ['General', 'Other'],
+      );
     } finally {
       setLoadingSubCategories(false);
     }
@@ -253,35 +306,71 @@ export default function DetailModal({
     try {
       setLoadingLocations(true);
       const response = await apiService.getLocations();
-      
+
       console.log('Locations API Response:', response.data);
 
       if (response.data) {
-        const locationList = Array.isArray(response.data) ? 
-          response.data : 
-          (response.data.locations || response.data.data || []);
-        
+        const locationList = Array.isArray(response.data)
+          ? response.data
+          : response.data.locations || response.data.data || [];
+
         const locationOptions = locationList.map(location => {
           if (typeof location === 'string') {
             return location;
           }
-          return location.name || location.label || location.city || location.title || String(location);
+          return (
+            location.name ||
+            location.label ||
+            location.city ||
+            location.title ||
+            String(location)
+          );
         });
 
-        setLocations(locationOptions.length > 0 ? locationOptions : [
-          'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Houston, TX',
-          'Phoenix, AZ', 'Philadelphia, PA', 'San Antonio, TX', 'San Diego, CA',
-          'Dallas, TX', 'San Jose, CA', 'London, UK', 'Dubai, UAE',
-          'Sydney, AU', 'Tokyo, JP', 'Singapore, SG', 'Hong Kong, HK', 'Other'
-        ]);
+        setLocations(
+          locationOptions.length > 0
+            ? locationOptions
+            : [
+                'New York, NY',
+                'Los Angeles, CA',
+                'Chicago, IL',
+                'Houston, TX',
+                'Phoenix, AZ',
+                'Philadelphia, PA',
+                'San Antonio, TX',
+                'San Diego, CA',
+                'Dallas, TX',
+                'San Jose, CA',
+                'London, UK',
+                'Dubai, UAE',
+                'Sydney, AU',
+                'Tokyo, JP',
+                'Singapore, SG',
+                'Hong Kong, HK',
+                'Other',
+              ],
+        );
       }
     } catch (error) {
       console.error('Error fetching locations:', error);
       setLocations([
-        'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Houston, TX',
-        'Phoenix, AZ', 'Philadelphia, PA', 'San Antonio, TX', 'San Diego, CA',
-        'Dallas, TX', 'San Jose, CA', 'London, UK', 'Dubai, UAE',
-        'Sydney, AU', 'Tokyo, JP', 'Singapore, SG', 'Hong Kong, HK', 'Other'
+        'New York, NY',
+        'Los Angeles, CA',
+        'Chicago, IL',
+        'Houston, TX',
+        'Phoenix, AZ',
+        'Philadelphia, PA',
+        'San Antonio, TX',
+        'San Diego, CA',
+        'Dallas, TX',
+        'San Jose, CA',
+        'London, UK',
+        'Dubai, UAE',
+        'Sydney, AU',
+        'Tokyo, JP',
+        'Singapore, SG',
+        'Hong Kong, HK',
+        'Other',
       ]);
     } finally {
       setLoadingLocations(false);
@@ -292,41 +381,54 @@ export default function DetailModal({
     try {
       setLoadingAuctionGroups(true);
       const response = await apiService.getAuctionGroups();
-      
+
       console.log('Auction Groups API Response:', response.data);
 
       if (response.data) {
-        const auctionGroupList = Array.isArray(response.data) ? 
-          response.data : 
-          (response.data.auction_groups || response.data.groups || response.data.data || []);
-        
+        const auctionGroupList = Array.isArray(response.data)
+          ? response.data
+          : response.data.auction_groups ||
+            response.data.groups ||
+            response.data.data ||
+            [];
+
         const auctionGroupOptions = auctionGroupList.map(group => {
           if (typeof group === 'string') {
             return group;
           }
-          return group.name || group.label || group.title || group.group_name || String(group);
+          return (
+            group.name ||
+            group.label ||
+            group.title ||
+            group.group_name ||
+            String(group)
+          );
         });
 
-        setAuctionGroups(auctionGroupOptions.length > 0 ? auctionGroupOptions : [
-          'Premium Equipment',
-          'Industrial Machinery', 
-          'Electronics & Tech',
-          'Automotive Equipment',
-          'Construction Tools',
-          'Standard Auctions',
-          'Quick Sale'
-        ]);
+        setAuctionGroups(
+          auctionGroupOptions.length > 0
+            ? auctionGroupOptions
+            : [
+                'Premium Equipment',
+                'Industrial Machinery',
+                'Electronics & Tech',
+                'Automotive Equipment',
+                'Construction Tools',
+                'Standard Auctions',
+                'Quick Sale',
+              ],
+        );
       }
     } catch (error) {
       console.error('Error fetching auction groups:', error);
       setAuctionGroups([
         'Premium Equipment',
-        'Industrial Machinery', 
+        'Industrial Machinery',
         'Electronics & Tech',
         'Automotive Equipment',
         'Construction Tools',
         'Standard Auctions',
-        'Quick Sale'
+        'Quick Sale',
       ]);
     } finally {
       setLoadingAuctionGroups(false);
@@ -335,12 +437,15 @@ export default function DetailModal({
 
   const handleClose = () => {
     setValidationErrors({});
+    setSubmissionType('');
     setShowReviewModal(false);
   };
 
-  const handleSaveAndSubmit = async () => {
-    // Validate all fields
-    const errors = validateFields();
+  const handleSubmission = async formType => {
+    setSubmissionType(formType);
+
+    // Validate fields based on form type
+    const errors = validateFields(formType);
     setValidationErrors(errors);
 
     // If there are validation errors, don't proceed
@@ -350,33 +455,45 @@ export default function DetailModal({
 
     try {
       setIsSubmitting(true);
-      
+
       // Separate media files by type
-      const images = currentMediaFiles.filter(file => file.category === 'images');
-      const documents = currentMediaFiles.filter(file => file.category === 'documents');
-      const videos = currentMediaFiles.filter(file => file.category === 'videos');
-      
-      // Add media files to form data
-      const productData = {};
+      const images = currentMediaFiles.filter(
+        file => file.category === 'images',
+      );
+      const documents = currentMediaFiles.filter(
+        file => file.category === 'documents',
+      );
+      const videos = currentMediaFiles.filter(
+        file => file.category === 'videos',
+      );
+
+      // Add media files and form_type to form data
+      const productData = {
+        form_type: formType, // Add form_type to the data
+      };
+
       Object.keys(fields).forEach(key => {
         if (fields[key]?.value !== null && fields[key]?.value !== undefined) {
           productData[key] = fields[key].value;
         }
       });
-      
-      console.log('Product Data:', productData);
-      console.log('Media Files:', { images, documents, videos });
-      
-      // Submit with media files
-      // await apiService.submitProduct(productData, images, documents, videos);
-      
       setShowReviewModal(false);
-      await handleContinueToSubmit();
+      await handleContinueToSubmit(formType); // Pass form type to parent
     } catch (error) {
       console.error('Error submitting:', error);
-      Alert.alert('Error', 'Failed to submit listing. Please try again.');
+      const errorMessages = {
+        save_later: 'Failed to save draft. Please try again.',
+        submit_market: 'Failed to submit to marketplace. Please try again.',
+        submit_auction: 'Failed to submit auction. Please try again.',
+      };
+      Alert.alert(
+        'Error',
+        errorMessages[formType] ||
+          'Failed to submit listing. Please try again.',
+      );
     } finally {
       setIsSubmitting(false);
+      setSubmissionType('');
     }
   };
 
@@ -392,10 +509,10 @@ export default function DetailModal({
     onChangeText(key, value);
   };
 
-  const handleCategoryChange = (categoryName) => {
+  const handleCategoryChange = categoryName => {
     // Find the selected category object
     const selectedCategory = categories.find(cat => cat.name === categoryName);
-    
+
     if (selectedCategory) {
       setSelectedCategoryId(selectedCategory.id);
       // Update both possible field names
@@ -407,13 +524,13 @@ export default function DetailModal({
     }
   };
 
-  const handleSubCategoryChange = (subCategoryName) => {
+  const handleSubCategoryChange = subCategoryName => {
     // Update both possible field names
     handleFieldChange('sub_category', subCategoryName);
     handleFieldChange('product_subcat', subCategoryName);
   };
 
-  const handleAuctionGroupChange = (value) => {
+  const handleAuctionGroupChange = value => {
     if (value === 'Create Custom Group') {
       setShowCustomAuctionGroup(true);
     } else {
@@ -430,12 +547,10 @@ export default function DetailModal({
     }
   };
 
-  const renderFieldError = (fieldName) => {
+  const renderFieldError = fieldName => {
     if (validationErrors[fieldName]) {
       return (
-        <Text style={styles.errorText}>
-          {validationErrors[fieldName]}
-        </Text>
+        <Text style={styles.errorText}>{validationErrors[fieldName]}</Text>
       );
     }
     return null;
@@ -459,19 +574,24 @@ export default function DetailModal({
         <View style={styles.fieldContainer}>
           <Text style={styles.label}>Category *</Text>
           <View style={styles.readOnlyField}>
-            <Text style={styles.readOnlyText} numberOfLines={1}>{fields.product_cat.value}</Text>
+            <Text style={styles.readOnlyText} numberOfLines={1}>
+              {fields.product_cat.value}
+            </Text>
           </View>
         </View>
       );
     }
-    
+
     // Otherwise show dropdown
     return (
       <View style={styles.fieldContainer}>
         <Text style={styles.label}>Category *</Text>
         <CustomDropdown
           options={categories.map(cat => cat.name)}
-          selectedValue={getCategoryValue() || (categories.length > 0 ? categories[0].name : 'Electronics')}
+          selectedValue={
+            getCategoryValue() ||
+            (categories.length > 0 ? categories[0].name : 'Electronics')
+          }
           onSelect={handleCategoryChange}
           placeholder="Select category"
           label="Product Category"
@@ -491,12 +611,14 @@ export default function DetailModal({
         <View style={styles.fieldContainer}>
           <Text style={styles.label}>Sub Category</Text>
           <View style={styles.readOnlyField}>
-            <Text style={styles.readOnlyText} numberOfLines={1}>{fields.product_subcat.value}</Text>
+            <Text style={styles.readOnlyText} numberOfLines={1}>
+              {fields.product_subcat.value}
+            </Text>
           </View>
         </View>
       );
     }
-    
+
     // Otherwise show dropdown
     return (
       <View style={styles.fieldContainer}>
@@ -512,6 +634,14 @@ export default function DetailModal({
         />
       </View>
     );
+  };
+
+  // Helper function to check if button should be disabled
+  const isButtonDisabled = formType => {
+    if (isSubmitting) return true;
+
+    const errors = validateFields(formType);
+    return Object.keys(errors).length > 0;
   };
 
   return (
@@ -532,7 +662,9 @@ export default function DetailModal({
               </View>
               <View>
                 <Text style={styles.modalTitle}>Review & Submit</Text>
-                <Text style={styles.modalSubtitle}>Finalize your listing details</Text>
+                <Text style={styles.modalSubtitle}>
+                  Finalize your listing details
+                </Text>
               </View>
             </View>
             <TouchableOpacity
@@ -545,7 +677,7 @@ export default function DetailModal({
           </View>
 
           {/* Content */}
-          <ScrollView 
+          <ScrollView
             style={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContainer}
@@ -558,13 +690,13 @@ export default function DetailModal({
                 </View>
                 <Text style={styles.sectionTitle}>Basic Information</Text>
               </View>
-              
+
               <View style={styles.fieldContainer}>
                 <Text style={styles.label}>Product Title *</Text>
                 <TextInput
                   style={[
                     styles.input,
-                    validationErrors.name && styles.inputError
+                    validationErrors.name && styles.inputError,
                   ]}
                   value={fields.name?.value || ''}
                   onChangeText={text => handleFieldChange('name', text)}
@@ -602,14 +734,16 @@ export default function DetailModal({
                 <Text style={styles.label}>Description *</Text>
                 <TextInput
                   style={[
-                    styles.input, 
+                    styles.input,
                     styles.textArea,
-                    validationErrors.equipment_description && styles.inputError
+                    validationErrors.equipment_description && styles.inputError,
                   ]}
                   multiline
                   numberOfLines={3}
                   value={fields.equipment_description?.value || ''}
-                  onChangeText={text => handleFieldChange('equipment_description', text)}
+                  onChangeText={text =>
+                    handleFieldChange('equipment_description', text)
+                  }
                   placeholder="Describe your equipment in detail..."
                   placeholderTextColor="#9ca3af"
                   textAlignVertical="top"
@@ -649,15 +783,15 @@ export default function DetailModal({
             {/* Pricing Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIcon, { backgroundColor: '#ecfdf5' }]}>
+                <View
+                  style={[styles.sectionIcon, { backgroundColor: '#ecfdf5' }]}
+                >
                   <Icon name="dollar-sign" size={16} color="#059669" />
                 </View>
                 <Text style={styles.sectionTitle}>Pricing Information</Text>
               </View>
-              
-              <View style={styles.row}>
-               
 
+              <View style={styles.row}>
                 <View style={[styles.fieldContainer, styles.halfWidth]}>
                   <Text style={styles.label}>Currency</Text>
                   <CustomDropdown
@@ -676,13 +810,17 @@ export default function DetailModal({
                       'AED (د.إ)',
                     ]}
                     selectedValue={fields.currency?.value || 'USD ($)'}
-                    onSelect={(val) => {
-                      const stringValue = val && typeof val === 'object' ? 
-                        (val.name || val.label || val.value || String(val)) : 
-                        String(val || 'USD ($)');
+                    onSelect={val => {
+                      const stringValue =
+                        val && typeof val === 'object'
+                          ? val.name || val.label || val.value || String(val)
+                          : String(val || 'USD ($)');
                       handleFieldChange('currency', stringValue);
                       // Auto-set auction currency if not set
-                      if (productType === 'Auction' && !fields.auction_currency?.value) {
+                      if (
+                        productType === 'Auction' &&
+                        !fields.auction_currency?.value
+                      ) {
                         handleFieldChange('auction_currency', stringValue);
                       }
                     }}
@@ -690,16 +828,18 @@ export default function DetailModal({
                     label="Currency"
                   />
                 </View>
-                 <View style={[styles.fieldContainer, styles.halfWidth]}>
+                <View style={[styles.fieldContainer, styles.halfWidth]}>
                   <Text style={styles.label}>Price *</Text>
                   <TextInput
                     style={[
                       styles.input,
-                      validationErrors.original_price && styles.inputError
+                      validationErrors.original_price && styles.inputError,
                     ]}
                     keyboardType="decimal-pad"
                     value={fields.original_price?.value || ''}
-                    onChangeText={text => handleFieldChange('original_price', text)}
+                    onChangeText={text =>
+                      handleFieldChange('original_price', text)
+                    }
                     placeholder="0.00"
                     placeholderTextColor="#9ca3af"
                   />
@@ -711,38 +851,49 @@ export default function DetailModal({
             {/* Product Type Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIcon, { backgroundColor: '#fef3c7' }]}>
+                <View
+                  style={[styles.sectionIcon, { backgroundColor: '#fef3c7' }]}
+                >
                   <Icon name="package" size={16} color="#f59e0b" />
                 </View>
                 <Text style={styles.sectionTitle}>Listing Type</Text>
               </View>
-              
+
               <View style={styles.productTypeContainer}>
                 <TouchableOpacity
                   style={[
                     styles.productTypeButton,
-                    productType === 'Marketplace' && styles.productTypeButtonActive
+                    productType === 'Marketplace' &&
+                      styles.productTypeButtonActive,
                   ]}
                   onPress={() => {
                     setProductType('Marketplace');
                     handleFieldChange('product_type', 'Marketplace');
                   }}
                 >
-                  <View style={[
-                    styles.productTypeIcon,
-                    productType === 'Marketplace' && styles.productTypeIconActive
-                  ]}>
-                    <Icon 
-                      name="shopping-bag" 
-                      size={18} 
-                      color={productType === 'Marketplace' ? '#6366f1' : '#6b7280'} 
+                  <View
+                    style={[
+                      styles.productTypeIcon,
+                      productType === 'Marketplace' &&
+                        styles.productTypeIconActive,
+                    ]}
+                  >
+                    <Icon
+                      name="shopping-bag"
+                      size={18}
+                      color={
+                        productType === 'Marketplace' ? '#6366f1' : '#6b7280'
+                      }
                     />
                   </View>
                   <View style={styles.productTypeContent}>
-                    <Text style={[
-                      styles.productTypeTitle,
-                      productType === 'Marketplace' && styles.productTypeTextActive
-                    ]}>
+                    <Text
+                      style={[
+                        styles.productTypeTitle,
+                        productType === 'Marketplace' &&
+                          styles.productTypeTextActive,
+                      ]}
+                    >
                       Marketplace
                     </Text>
                     <Text style={styles.productTypeDescription}>
@@ -757,32 +908,43 @@ export default function DetailModal({
                 <TouchableOpacity
                   style={[
                     styles.productTypeButton,
-                    productType === 'Auction' && styles.productTypeButtonActive
+                    productType === 'Auction' && styles.productTypeButtonActive,
                   ]}
                   onPress={() => {
                     setProductType('Auction');
                     handleFieldChange('product_type', 'Auction');
                     // Auto-set auction currency from main currency
-                    if (fields.currency?.value && !fields.auction_currency?.value) {
-                      handleFieldChange('auction_currency', fields.currency.value);
+                    if (
+                      fields.currency?.value &&
+                      !fields.auction_currency?.value
+                    ) {
+                      handleFieldChange(
+                        'auction_currency',
+                        fields.currency.value,
+                      );
                     }
                   }}
                 >
-                  <View style={[
-                    styles.productTypeIcon,
-                    productType === 'Auction' && styles.productTypeIconActive
-                  ]}>
-                    <Icon 
-                      name="zap" 
-                      size={18} 
-                      color={productType === 'Auction' ? '#6366f1' : '#6b7280'} 
+                  <View
+                    style={[
+                      styles.productTypeIcon,
+                      productType === 'Auction' && styles.productTypeIconActive,
+                    ]}
+                  >
+                    <Icon
+                      name="zap"
+                      size={18}
+                      color={productType === 'Auction' ? '#6366f1' : '#6b7280'}
                     />
                   </View>
                   <View style={styles.productTypeContent}>
-                    <Text style={[
-                      styles.productTypeTitle,
-                      productType === 'Auction' && styles.productTypeTextActive
-                    ]}>
+                    <Text
+                      style={[
+                        styles.productTypeTitle,
+                        productType === 'Auction' &&
+                          styles.productTypeTextActive,
+                      ]}
+                    >
                       Auction
                     </Text>
                     <Text style={styles.productTypeDescription}>
@@ -799,12 +961,14 @@ export default function DetailModal({
             {/* Location & Category Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIcon, { backgroundColor: '#fee2e2' }]}>
+                <View
+                  style={[styles.sectionIcon, { backgroundColor: '#fee2e2' }]}
+                >
                   <Icon name="map-pin" size={16} color="#dc2626" />
                 </View>
                 <Text style={styles.sectionTitle}>Location & Category</Text>
               </View>
-              
+
               <View style={styles.row}>
                 <View style={[styles.fieldContainer, styles.halfWidth]}>
                   {renderCategoryField()}
@@ -819,11 +983,20 @@ export default function DetailModal({
                 <Text style={styles.label}>Location *</Text>
                 <CustomDropdown
                   options={locations}
-                  selectedValue={fields.item_location?.value || (locations.length > 0 ? locations[0] : 'New York, NY')}
-                  onSelect={(val) => {
-                    const stringValue = val && typeof val === 'object' ? 
-                      (val.name || val.label || val.value || String(val)) : 
-                      String(val || (locations.length > 0 ? locations[0] : 'New York, NY'));
+                  selectedValue={
+                    fields.item_location?.value ||
+                    (locations.length > 0 ? locations[0] : 'New York, NY')
+                  }
+                  onSelect={val => {
+                    const stringValue =
+                      val && typeof val === 'object'
+                        ? val.name || val.label || val.value || String(val)
+                        : String(
+                            val ||
+                              (locations.length > 0
+                                ? locations[0]
+                                : 'New York, NY'),
+                          );
                     handleFieldChange('item_location', stringValue);
                   }}
                   placeholder="Select location"
@@ -838,12 +1011,14 @@ export default function DetailModal({
             {/* Media Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIcon, { backgroundColor: '#f0f9ff' }]}>
+                <View
+                  style={[styles.sectionIcon, { backgroundColor: '#f0f9ff' }]}
+                >
                   <Icon name="file" size={16} color="#0284c7" />
                 </View>
                 <Text style={styles.sectionTitle}>Media & Documents</Text>
               </View>
-              
+
               <MediaUploadComponent
                 onFilesSelected={handleMediaFilesChange}
                 uploadedFiles={currentMediaFiles}
@@ -856,12 +1031,14 @@ export default function DetailModal({
             {productType === 'Auction' && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionIcon, { backgroundColor: '#e0e7ff' }]}>
+                  <View
+                    style={[styles.sectionIcon, { backgroundColor: '#e0e7ff' }]}
+                  >
                     <Icon name="clock" size={16} color="#7c3aed" />
                   </View>
                   <Text style={styles.sectionTitle}>Auction Settings</Text>
                 </View>
-                
+
                 <View style={styles.fieldContainer}>
                   <Text style={styles.label}>Auction Group</Text>
                   {showCustomAuctionGroup ? (
@@ -881,20 +1058,29 @@ export default function DetailModal({
                             setCustomAuctionGroup('');
                           }}
                         >
-                          <Text style={styles.customGroupButtonCancelText}>Cancel</Text>
+                          <Text style={styles.customGroupButtonCancelText}>
+                            Cancel
+                          </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.customGroupButtonSave}
                           onPress={handleCustomAuctionGroupSubmit}
                         >
-                          <Text style={styles.customGroupButtonSaveText}>Save</Text>
+                          <Text style={styles.customGroupButtonSaveText}>
+                            Save
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     </View>
                   ) : (
                     <CustomDropdown
                       options={[...auctionGroups, 'Create Custom Group']}
-                      selectedValue={fields.auction_group?.value || (auctionGroups.length > 0 ? auctionGroups[0] : 'Standard Auctions')}
+                      selectedValue={
+                        fields.auction_group?.value ||
+                        (auctionGroups.length > 0
+                          ? auctionGroups[0]
+                          : 'Standard Auctions')
+                      }
                       onSelect={handleAuctionGroupChange}
                       placeholder="Select auction group"
                       label="Auction Group"
@@ -925,11 +1111,16 @@ export default function DetailModal({
                         'PKR (Rs)',
                         'AED (د.إ)',
                       ]}
-                      selectedValue={fields.auction_currency?.value || fields.currency?.value || 'USD ($)'}
-                      onSelect={(val) => {
-                        const stringValue = val && typeof val === 'object' ? 
-                          (val.name || val.label || val.value || String(val)) : 
-                          String(val || 'USD ($)');
+                      selectedValue={
+                        fields.auction_currency?.value ||
+                        fields.currency?.value ||
+                        'USD ($)'
+                      }
+                      onSelect={val => {
+                        const stringValue =
+                          val && typeof val === 'object'
+                            ? val.name || val.label || val.value || String(val)
+                            : String(val || 'USD ($)');
                         handleFieldChange('auction_currency', stringValue);
                       }}
                       placeholder="Select currency"
@@ -948,21 +1139,21 @@ export default function DetailModal({
                 <View style={styles.row}>
                   <View style={[styles.fieldContainer, styles.halfWidth]}>
                     <Text style={styles.label}>Start Date *</Text>
-                    <View style={[
-                      styles.datePickerWrapper,
-                      validationErrors.auction_start_date && styles.datePickerError
-                    ]}>
+                    <View
+                      style={[
+                        styles.datePickerWrapper,
+                        validationErrors.auction_start_date &&
+                          styles.datePickerError,
+                      ]}
+                    >
                       <CustomDateTimePicker
                         value={
                           fields.auction_start_date?.value
                             ? new Date(fields.auction_start_date.value)
                             : null
                         }
-                        onChange={date =>
-                          handleFieldChange(
-                            'auction_start_date',
-                           new Date().toISOString() || '',
-                          )
+                        onChange={iso =>
+                          handleFieldChange('auction_start_date', iso || '')
                         }
                         textStyle={styles.datePickerText}
                       />
@@ -972,18 +1163,21 @@ export default function DetailModal({
 
                   <View style={[styles.fieldContainer, styles.halfWidth]}>
                     <Text style={styles.label}>End Date *</Text>
-                    <View style={[
-                      styles.datePickerWrapper,
-                      validationErrors.auction_end_date && styles.datePickerError
-                    ]}>
+                    <View
+                      style={[
+                        styles.datePickerWrapper,
+                        validationErrors.auction_end_date &&
+                          styles.datePickerError,
+                      ]}
+                    >
                       <CustomDateTimePicker
                         value={
                           fields.auction_end_date?.value
                             ? new Date(fields.auction_end_date.value)
                             : null
                         }
-                        onChange={date =>
-                          handleFieldChange('auction_end_date', date?.toISOString() || '')
+                        onChange={iso =>
+                          handleFieldChange('auction_end_date', iso || '')
                         }
                         textStyle={styles.datePickerText}
                       />
@@ -998,11 +1192,14 @@ export default function DetailModal({
                     <TextInput
                       style={[
                         styles.input,
-                        validationErrors.auction_start_price && styles.inputError
+                        validationErrors.auction_start_price &&
+                          styles.inputError,
                       ]}
                       keyboardType="decimal-pad"
                       value={fields.auction_start_price?.value || ''}
-                      onChangeText={text => handleFieldChange('auction_start_price', text)}
+                      onChangeText={text =>
+                        handleFieldChange('auction_start_price', text)
+                      }
                       placeholder="Enter starting bid amount"
                       placeholderTextColor="#9ca3af"
                     />
@@ -1017,11 +1214,13 @@ export default function DetailModal({
                     <TextInput
                       style={[
                         styles.input,
-                        validationErrors.reserve_price && styles.inputError
+                        validationErrors.reserve_price && styles.inputError,
                       ]}
                       keyboardType="decimal-pad"
                       value={fields.reserve_price?.value || ''}
-                      onChangeText={text => handleFieldChange('reserve_price', text)}
+                      onChangeText={text =>
+                        handleFieldChange('reserve_price', text)
+                      }
                       placeholder="Enter reserve price"
                       placeholderTextColor="#9ca3af"
                     />
@@ -1038,7 +1237,9 @@ export default function DetailModal({
             {Object.keys(validationErrors).length > 0 && (
               <View style={styles.validationSummary}>
                 <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionIcon, { backgroundColor: '#fef2f2' }]}>
+                  <View
+                    style={[styles.sectionIcon, { backgroundColor: '#fef2f2' }]}
+                  >
                     <Icon name="alert-circle" size={16} color="#dc2626" />
                   </View>
                   <Text style={[styles.sectionTitle, { color: '#dc2626' }]}>
@@ -1056,12 +1257,14 @@ export default function DetailModal({
             {/* Summary Section */}
             <View style={styles.summarySection}>
               <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIcon, { backgroundColor: '#f0f9ff' }]}>
+                <View
+                  style={[styles.sectionIcon, { backgroundColor: '#f0f9ff' }]}
+                >
                   <Icon name="file-text" size={16} color="#0284c7" />
                 </View>
                 <Text style={styles.sectionTitle}>Listing Summary</Text>
               </View>
-              
+
               <View style={styles.summaryCard}>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Type:</Text>
@@ -1070,7 +1273,10 @@ export default function DetailModal({
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Price:</Text>
                   <Text style={styles.summaryValue}>
-                    {fields.currency?.value} {parseFloat(fields.original_price?.value || 0).toLocaleString()}
+                    {fields.currency?.value}{' '}
+                    {parseFloat(
+                      fields.original_price?.value || 0,
+                    ).toLocaleString()}
                   </Text>
                 </View>
                 {productType === 'Auction' && (
@@ -1078,14 +1284,20 @@ export default function DetailModal({
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Starting Bid:</Text>
                       <Text style={styles.summaryValue}>
-                        {fields.auction_currency?.value} {parseFloat(fields.auction_start_price?.value || 0).toLocaleString()}
+                        {fields.auction_currency?.value}{' '}
+                        {parseFloat(
+                          fields.auction_start_price?.value || 0,
+                        ).toLocaleString()}
                       </Text>
                     </View>
                     {fields.reserve_price?.value && (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Reserve Price:</Text>
                         <Text style={styles.summaryValue}>
-                          {fields.auction_currency?.value} {parseFloat(fields.reserve_price.value).toLocaleString()}
+                          {fields.auction_currency?.value}{' '}
+                          {parseFloat(
+                            fields.reserve_price.value,
+                          ).toLocaleString()}
                         </Text>
                       </View>
                     )}
@@ -1100,13 +1312,16 @@ export default function DetailModal({
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Location:</Text>
-                  <Text style={styles.summaryValue}>{fields.item_location?.value}</Text>
+                  <Text style={styles.summaryValue}>
+                    {fields.item_location?.value}
+                  </Text>
                 </View>
                 {currentMediaFiles.length > 0 && (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Media Files:</Text>
                     <Text style={styles.summaryValue}>
-                      {currentMediaFiles.length} file{currentMediaFiles.length > 1 ? 's' : ''} attached
+                      {currentMediaFiles.length} file
+                      {currentMediaFiles.length > 1 ? 's' : ''} attached
                     </Text>
                   </View>
                 )}
@@ -1117,32 +1332,89 @@ export default function DetailModal({
             <View style={styles.bottomSpacing} />
           </ScrollView>
 
-          {/* Fixed Bottom Buttons */}
+          {/* Fixed Bottom Buttons - Three Action Buttons */}
           <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleClose}
-              disabled={isSubmitting}
-            >
-              <Icon name="x" size={16} color="#6b7280" />
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-
+            {/* Save to Later Button */}
             <TouchableOpacity
               style={[
-                styles.saveButton,
-                (Object.keys(validationErrors).length > 0 || isSubmitting) && styles.saveButtonDisabled
+                styles.actionButton,
+                styles.saveLaterButton,
+                // isButtonDisabled('save_later') && styles.buttonDisabled
               ]}
-              onPress={handleSaveAndSubmit}
-              disabled={Object.keys(validationErrors).length > 0 || isSubmitting}
+              onPress={() => handleSubmission('save_later')}
+              disabled={isButtonDisabled('save_later')}
             >
-              {isSubmitting ? (
+              {isSubmitting && submissionType === 'save_later' ? (
+                <ActivityIndicator size="small" color="#6b7280" />
+              ) : (
+                <Icon name="bookmark" size={14} color="#6b7280" />
+              )}
+              <Text
+                style={[
+                  styles.actionButtonText,
+                  styles.saveLaterButtonText,
+                  // isButtonDisabled('save_later') && styles.buttonTextDisabled
+                ]}
+              >
+                {isSubmitting && submissionType === 'save_later'
+                  ? 'Saving...'
+                  : 'Save Draft'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Save to Marketplace Button */}
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                styles.marketplaceButton,
+                // isButtonDisabled('submit_market') && styles.buttonDisabled
+              ]}
+              onPress={() => handleSubmission('submit_market')}
+              // disabled={isButtonDisabled('submit_market')}
+            >
+              {isSubmitting && submissionType === 'submit_market' ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Icon name="send" size={16} color="#fff" />
+                <Icon name="shopping-bag" size={14} color="#fff" />
               )}
-              <Text style={styles.saveButtonText}>
-                {isSubmitting ? 'Submitting...' : 'Submit Listing'}
+              <Text
+                style={[
+                  styles.actionButtonText,
+                  styles.marketplaceButtonText,
+                  // isButtonDisabled('submit_market') && styles.buttonTextDisabled
+                ]}
+              >
+                {isSubmitting && submissionType === 'submit_market'
+                  ? 'Submitting...'
+                  : 'Marketplace'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Save to Auction Button */}
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                styles.auctionButton,
+                // isButtonDisabled('submit_auction') && styles.buttonDisabled
+              ]}
+              onPress={() => handleSubmission('submit_auction')}
+              // disabled={isButtonDisabled('submit_auction')}
+            >
+              {isSubmitting && submissionType === 'submit_auction' ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Icon name="zap" size={14} color="#fff" />
+              )}
+              <Text
+                style={[
+                  styles.actionButtonText,
+                  styles.auctionButtonText,
+                  // isButtonDisabled('submit_auction') && styles.buttonTextDisabled
+                ]}
+              >
+                {isSubmitting && submissionType === 'submit_auction'
+                  ? 'Submitting...'
+                  : 'Save Auction'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1151,6 +1423,7 @@ export default function DetailModal({
     </Modal>
   );
 }
+
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
@@ -1480,12 +1753,12 @@ const styles = StyleSheet.create({
     height: scaleHeight(16),
   },
 
-  // Buttons
+  // New Three Action Buttons
   buttonContainer: {
     flexDirection: 'row',
-    gap: scaleWidth(12),
-    paddingHorizontal: scaleWidth(20),
-    paddingVertical: scaleHeight(16),
+    gap: scaleWidth(8),
+    paddingHorizontal: scaleWidth(16),
+    paddingVertical: scaleHeight(12),
     backgroundColor: '#fff',
     borderTopWidth: scale(1),
     borderTopColor: '#e5e7eb',
@@ -1495,47 +1768,65 @@ const styles = StyleSheet.create({
     shadowRadius: scale(8),
     elevation: 8,
   },
-  cancelButton: {
+  actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: scaleWidth(6),
-    paddingVertical: scaleHeight(12),
-    backgroundColor: '#f3f4f6',
+    gap: scaleWidth(4),
+    paddingVertical: scaleHeight(10),
     borderRadius: scale(8),
-    borderWidth: scale(1),
-    borderColor: '#d1d5db',
+    minHeight: scaleHeight(44),
   },
-  cancelButtonText: {
-    color: '#6b7280',
-    fontWeight: '500',
-    fontSize: scaleFont(14),
+  actionButtonText: {
+    fontWeight: '600',
+    fontSize: scaleFont(12),
     fontFamily: 'Poppins-Regular',
   },
-  saveButton: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: scaleWidth(6),
-    paddingVertical: scaleHeight(12),
-    backgroundColor: '#6366f1',
-    borderRadius: scale(8),
-    shadowColor: '#6366f1',
+
+  // Save to Later Button (Draft)
+  saveLaterButton: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: scale(1),
+    borderColor: '#dee2e6',
+  },
+  saveLaterButtonText: {
+    color: '#6b7280',
+  },
+
+  // Save to Marketplace Button
+  marketplaceButton: {
+    backgroundColor: '#059669',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: scaleHeight(2) },
     shadowOpacity: 0.2,
     shadowRadius: scale(4),
     elevation: 4,
   },
-  saveButtonDisabled: {
-    backgroundColor: '#9ca3af',
-    shadowColor: 'transparent',
-  },
-  saveButtonText: {
+  marketplaceButtonText: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: scaleFont(14),
-    fontFamily: 'Poppins-Regular',
+  },
+
+  // Save to Auction Button
+  auctionButton: {
+    backgroundColor: '#7c3aed',
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: scaleHeight(2) },
+    shadowOpacity: 0.2,
+    shadowRadius: scale(4),
+    elevation: 4,
+  },
+  auctionButtonText: {
+    color: '#fff',
+  },
+
+  // Disabled button states
+  buttonDisabled: {
+    backgroundColor: '#e5e7eb',
+    shadowColor: 'transparent',
+    borderColor: '#d1d5db',
+  },
+  buttonTextDisabled: {
+    color: '#9ca3af',
   },
 });

@@ -745,6 +745,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: scaleHeight(30),
     marginBottom: scaleHeight(20),
   },
   headerLeft: {
