@@ -11,7 +11,6 @@ import {
   StatusBar,
   Dimensions,
   Animated,
-  Modal,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -60,7 +59,7 @@ const FONTS = {
 // Dropdown options
 const CONDITIONS = [
   'New/Unused',
-  'Like New',
+  'Like New', 
   'Used',
   'Used, Needs Minor Repair',
 ];
@@ -101,19 +100,11 @@ export default function EditProductScreen({ route, navigation }) {
   const [productData, setProductData] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [showReviewModal, setShowReviewModal] = useState(false);
   const [mediaFiles, setMediaFiles] = useState([]);
 
   // Form fields state
   const [fields, setFields] = useState({});
   
-  // Dropdown states
-  const [dropdownVisible, setDropdownVisible] = useState({
-    condition: false,
-    operation_status: false,
-    currency: false,
-  });
-
   // API data states
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
@@ -128,7 +119,29 @@ export default function EditProductScreen({ route, navigation }) {
   // Validation state
   const [validationErrors, setValidationErrors] = useState({});
 
-  // Initialize fields with product data - FIXED mapping
+  // Helper function to format currency for display
+  const formatCurrencyForDisplay = (currencyCode) => {
+    if (!currencyCode) return 'USD ($)';
+    
+    const currencyMap = {
+      'USD': 'USD ($)',
+      'CNY': 'CNY (¥)',
+      'TWD': 'TWD (NT$)',
+      'THB': 'THB (฿)',
+      'VND': 'VND (₫)',
+      'HKD': 'HKD (HK$)',
+      'EUR': 'EUR (€)',
+      'CAD': 'CAD (C$)',
+      'GBP': 'GBP (£)',
+      'AUD': 'AUD (A$)',
+      'PKR': 'PKR (Rs)',
+      'AED': 'AED (د.إ)',
+    };
+    
+    return currencyMap[currencyCode] || `${currencyCode} ($)`;
+  };
+
+  // Initialize fields with proper currency mapping
   const initializeFields = (data) => {
     if (!data) return {};
 
@@ -136,7 +149,7 @@ export default function EditProductScreen({ route, navigation }) {
       name: { value: data.title || '', editing: false },
       brand: { value: data.brand || '', editing: false },
       model: { value: data.model || '', editing: false },
-      year: { value: data.manufacturing_year || '', editing: false },
+      year: { value: data.manufacturing_year?.toString() || '', editing: false },
       equipment_description: {
         value: data.description || '',
         editing: false,
@@ -150,27 +163,48 @@ export default function EditProductScreen({ route, navigation }) {
         value: data.operation_status || 'Running',
         editing: false,
       },
-      currency: { value: data.currency ? `${data.currency} ($)` : 'USD ($)', editing: false },
+      currency: { 
+        value: formatCurrencyForDisplay(data.currency), 
+        editing: false 
+      },
       original_price: {
-        value: data.price || data.regular_price || '0',
+        value: (data.price || data.regular_price || '0').toString(),
         editing: false,
       },
       product_type: { value: data.product_type || 'marketplace', editing: false },
-      item_location: { value: data.location || '', editing: false },
-      sub_category: { value: data.subcategory || '', editing: false },
+      item_location: { value: data.location || data.item_location || '', editing: false },
+      sub_category: { value: data.subcategory || data.sub_category || '', editing: false },
       dimensions: { value: data.dimensions || '', editing: false },
       co2_emission: { value: data.co2_emission || '', editing: false },
-      // Auction fields
-      auction_start_date: { value: data.auction_start_date || '', editing: false },
-      auction_end_date: { value: data.auction_end_date || '', editing: false },
-      auction_start_price: { value: data.auction_start_price || '0', editing: false },
+      // Auction fields - FIXED to use proper field names
+      auction_start_time: { value: data.auction_start_time || '', editing: false },
+      auction_end_time: { value: data.auction_end_time || '', editing: false },
+     
+      auction_start_price: { 
+        value: (data.auction_start_price || '0').toString(), 
+        editing: false 
+      },
       auction_group: { value: data.auction_group || '', editing: false },
-      auction_currency: { value: data.currency ? `${data.currency} ($)` : 'USD ($)', editing: false },
-      reserve_price: { value: data.reserve_price || '', editing: false },
+      auction_increment: { 
+        value: (data.auction_increment || '').toString(), 
+        editing: false 
+      },
+      auction_reserve: { 
+        value: (data.auction_reserve || '').toString(), 
+        editing: false 
+      },
+      auction_currency: { 
+        value: data.product_type === 'auction' ? formatCurrencyForDisplay(data.currency) : 'USD ($)', 
+        editing: false 
+      },
+      reserve_price: { 
+        value: data.reserve_price ? data.reserve_price.toString() : '', 
+        editing: false 
+      },
     };
   };
 
-  // Fetch product data - FIXED function
+  // Fetch product data with better error handling and field mapping
   const fetchProductData = async (id) => {
     try {
       setIsLoading(true);
@@ -186,6 +220,15 @@ export default function EditProductScreen({ route, navigation }) {
         const initialFields = initializeFields(data);
         setFields(initialFields);
         setProductData(data);
+
+        // Fetch subcategories if category exists
+        if (data.category) {
+          fetchSubCategories(data.category);
+        }
+
+        // Set selected category ID for subcategory fetching
+        const categoryId = categories.find(cat => cat.name === data.category)?.id;
+        setSelectedCategoryId(categoryId);
         
         // Start animations
         Animated.timing(fadeAnim, {
@@ -204,6 +247,42 @@ export default function EditProductScreen({ route, navigation }) {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Add subcategory fetching function
+  const fetchSubCategories = async (categoryName) => {
+    try {
+      setLoadingSubCategories(true);
+      
+      // Find category ID from name
+      const category = categories.find(cat => cat.name === categoryName);
+      if (!category || !category.id) {
+        setSubCategories([]);
+        return;
+      }
+
+      const response = await apiService.getSubCategories(category.id);
+      
+      if (response.data) {
+        const subCategoryList = Array.isArray(response.data)
+          ? response.data
+          : response.data.subcategories || response.data.data || [];
+
+        const subCategoryOptions = subCategoryList.map(subCat => {
+          if (typeof subCat === 'string') {
+            return subCat;
+          }
+          return subCat.name || subCat.label || subCat.title || String(subCat);
+        });
+
+        setSubCategories(subCategoryOptions);
+      }
+    } catch (error) {
+      console.error('Error fetching subcategories:', error);
+      setSubCategories([]);
+    } finally {
+      setLoadingSubCategories(false);
     }
   };
 
@@ -257,7 +336,6 @@ export default function EditProductScreen({ route, navigation }) {
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
-      // Set default categories
       setCategories([
         { name: 'Heavy Equipment', id: null },
         { name: 'Electronics', id: null },
@@ -371,76 +449,68 @@ export default function EditProductScreen({ route, navigation }) {
       ...prev,
       [key]: { ...prev[key], value: text },
     }));
-  };
 
-  // Dropdown handlers
-  const toggleDropdown = fieldKey => {
-    setDropdownVisible(prev => ({
-      ...prev,
-      [fieldKey]: !prev[fieldKey],
-    }));
-  };
-
-  const selectDropdownOption = (fieldKey, value) => {
-    onChangeText(fieldKey, value);
-    setDropdownVisible(prev => ({
-      ...prev,
-      [fieldKey]: false,
-    }));
-  };
-
-  const closeAllDropdowns = () => {
-    setDropdownVisible({
-      condition: false,
-      operation_status: false,
-      currency: false,
-    });
+    // Handle category change to fetch subcategories
+    if (key === 'parent_category') {
+      const selectedCategory = categories.find(cat => cat.name === text);
+      setSelectedCategoryId(selectedCategory?.id || null);
+      
+      // Clear subcategory when category changes
+      setFields(prevFields => ({
+        ...prevFields,
+        sub_category: { ...prevFields.sub_category, value: '' },
+      }));
+      
+      // Fetch subcategories for new category
+      if (selectedCategory && selectedCategory.id) {
+        fetchSubCategories(text);
+      } else {
+        setSubCategories([]);
+      }
+    }
   };
 
   // Validation
-  const validateFields = () => {
-    const errors = {};
+  // Validation
+const validateFields = () => {
+  const errors = {};
 
-    if (!fields.name?.value?.trim()) {
-      errors.name = 'Product title is required';
+  if (!fields.name?.value?.trim()) {
+    errors.name = 'Product title is required';
+  }
+
+  if (!fields.equipment_description?.value?.trim()) {
+    errors.equipment_description = 'Product description is required';
+  }
+
+  // Auction-specific validation
+  if (fields.product_type?.value === 'auction') {
+    if (!fields.auction_start_time?.value) {
+      errors.auction_start_time = 'Start date is required for auctions';
     }
 
-    if (!fields.equipment_description?.value?.trim()) {
-      errors.equipment_description = 'Product description is required';
+    if (!fields.auction_end_time?.value) {
+      errors.auction_end_time = 'End date is required for auctions';
     }
 
-    if (!fields.original_price?.value || parseFloat(fields.original_price.value) <= 0) {
-      errors.original_price = 'Valid price is required';
-    }
-
-    // Auction-specific validation
-    if (fields.product_type?.value === 'auction') {
-      if (!fields.auction_start_date?.value) {
-        errors.auction_start_date = 'Start date is required for auctions';
-      }
-
-      if (!fields.auction_end_date?.value) {
-        errors.auction_end_date = 'End date is required for auctions';
-      }
-
-      if (fields.auction_start_date?.value && fields.auction_end_date?.value) {
-        const startDate = new Date(fields.auction_start_date.value);
-        const endDate = new Date(fields.auction_end_date.value);
-
-        if (endDate <= startDate) {
-          errors.auction_end_date = 'End date must be after start date';
-        }
-      }
-
-      if (!fields.auction_start_price?.value || parseFloat(fields.auction_start_price.value) <= 0) {
-        errors.auction_start_price = 'Valid starting bid price is required';
+    if (fields.auction_start_time?.value && fields.auction_end_time?.value) {
+      const startDate = new Date(fields.auction_start_time.value);
+      const endDate = new Date(fields.auction_end_time.value);
+      if (endDate <= startDate) {
+        errors.auction_end_time = 'End date must be after start date';
       }
     }
 
-    return errors;
-  };
+    if (!fields.auction_start_price?.value || parseFloat(fields.auction_start_price.value) <= 0) {
+      errors.auction_start_price = 'Valid starting bid price is required';
+    }
+  }
 
-  // FIXED Update product function
+  return errors;
+};
+
+
+  // Update product function with better field mapping
   const handleUpdateProduct = async () => {
     try {
       // Validate fields
@@ -460,17 +530,23 @@ export default function EditProductScreen({ route, navigation }) {
       // Get auth token
       const userToken = await AsyncStorage.getItem('userToken');
       
-      // Prepare update data - matching your API response structure
+      // Prepare update data
       const updateData = new FormData();
       
       // Add product ID
       updateData.append('product_id', listingId || productData?.ID);
       
-      // Map form fields to API fields based on your response structure
-      updateData.append('title', fields.name?.value || '');
-      updateData.append('description', fields.equipment_description?.value || '');
-      updateData.append('brand', fields.brand?.value || '');
-      updateData.append('model', fields.model?.value || '');
+      // Helper function to extract currency code
+      const extractCurrencyCode = (currencyString) => {
+        if (!currencyString) return 'USD';
+        return currencyString.split(' ')[0] || 'USD';
+      };
+
+      // Map form fields to API fields
+      updateData.append('title', fields.name?.value?.trim() || '');
+      updateData.append('description', fields.equipment_description?.value?.trim() || '');
+      updateData.append('brand', fields.brand?.value?.trim() || '');
+      updateData.append('model', fields.model?.value?.trim() || '');
       updateData.append('operation_status', fields.operation_status?.value || '');
       updateData.append('manufacturing_year', fields.year?.value || '');
       updateData.append('item_condition', fields.condition?.value || '');
@@ -478,23 +554,42 @@ export default function EditProductScreen({ route, navigation }) {
       updateData.append('item_location', fields.item_location?.value || '');
       updateData.append('product_type', fields.product_type?.value || 'marketplace');
       
-      // Extract currency code from currency string (e.g., "USD ($)" -> "USD")
-      const currencyCode = fields.currency?.value?.split(' ')[0] || 'USD';
+      // Currency and price
+      const currencyCode = extractCurrencyCode(fields.currency?.value);
       updateData.append('currency', currencyCode);
       updateData.append('price', fields.original_price?.value || '0');
       updateData.append('regular_price', fields.original_price?.value || '0');
 
-      // Add subcategory if exists
+      // Add subcategory properly
       if (fields.sub_category?.value) {
         updateData.append('subcategory', fields.sub_category.value);
+        // updateData.append('sub_category', fields.sub_category.value);
       }
 
       // Add auction-specific fields if product type is auction
       if (fields.product_type?.value === 'auction') {
-        updateData.append('auction_start_date', fields.auction_start_date?.value || '');
-        updateData.append('auction_end_date', fields.auction_end_date?.value || '');
-        updateData.append('auction_start_price', fields.auction_start_price?.value || '0');
+        // updateData.append('_yith_auction_for', fields.auction_start_time?.value || '');
+        // updateData.append('_yith_auction_to', fields.auction_end_time?.value || '');
+        updateData.append('_yith_auction_for', fields.auction_start_time?.value || '');
+        updateData.append('_yith_auction_to', fields.auction_end_time?.value || '');
+        updateData.append('_yith_auction_start_price', fields.auction_start_price?.value || '0');
         updateData.append('auction_group', fields.auction_group?.value || '');
+        
+        // Add auction increment if provided
+        if (fields.auction_increment?.value) {
+          updateData.append('_yith_auction_minimum_increment_amount', fields.auction_increment.value);
+        }
+        
+        // Add auction reserve if provided
+        if (fields.auction_reserve?.value) {
+          updateData.append('_yith_auction_reserve_price', fields.auction_reserve.value);
+        }
+        
+        // Use auction_currency for auction items
+        const auctionCurrencyCode = extractCurrencyCode(fields.auction_currency?.value);
+        updateData.append('auction_currency', auctionCurrencyCode);
+        
+        // Legacy support for reserve_price field
         if (fields.reserve_price?.value) {
           updateData.append('reserve_price', fields.reserve_price.value);
         }
@@ -527,8 +622,7 @@ export default function EditProductScreen({ route, navigation }) {
         });
       }
 
-      console.log('🔄 Updating product with ID:', listingId || productData?.ID);
-      console.log('updateDataupdateData' ,updateData);
+      console.log('🔄 Updating product with ID:', updateData || productData?.ID);
 
       // Call update API
       const response = await fetch('https://greenbidz.com/wp-json/greenbidz-api/v1/product/update', {
@@ -717,132 +811,76 @@ export default function EditProductScreen({ route, navigation }) {
     </View>
   );
 
-  const renderDropdownField = (key, label, icon, options) => (
-    <View style={styles.fieldContainer}>
-      <View style={styles.fieldHeader}>
-        <Icon name={icon} size={16} color={COLORS.primary} />
-        <Text style={styles.fieldLabel}>{label}</Text>
-      </View>
+  const renderPriceField = (key, label, icon) => {
+    // Determine which currency to use based on field type and product type
+    const getCurrencyForField = (fieldKey) => {
+      if (fields.product_type?.value === 'auction') {
+        // For auction items, use auction_currency for auction-related fields
+        if (fieldKey.includes('auction') || fieldKey === 'reserve_price') {
+          return fields.auction_currency?.value || fields.currency?.value || 'USD ($)';
+        }
+      }
+      // For marketplace items or non-auction fields, use regular currency
+      return fields.currency?.value || 'USD ($)';
+    };
 
-      <View style={styles.fieldInputContainer}>
-        <TouchableOpacity
-          style={styles.fieldDisplay}
-          onPress={() => toggleDropdown(key)}
-        >
-          <Text style={styles.fieldText}>
-            {fields[key]?.value || `Select ${label.toLowerCase()}`}
-          </Text>
-          <Icon
-            name={dropdownVisible[key] ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={COLORS.textMuted}
-          />
-        </TouchableOpacity>
+    const currentCurrency = getCurrencyForField(key);
 
-        <Modal
-          visible={dropdownVisible[key]}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => closeAllDropdowns()}
-        >
-          <TouchableOpacity
-            style={styles.dropdownOverlay}
-            activeOpacity={1}
-            onPress={() => closeAllDropdowns()}
-          >
-            <View style={styles.dropdownModal}>
-              <View style={styles.dropdownHeader}>
-                <Text style={styles.dropdownTitle}>Select {label}</Text>
-                <TouchableOpacity
-                  onPress={() => closeAllDropdowns()}
-                  style={styles.dropdownCloseButton}
-                >
-                  <Icon name="x" size={20} color={COLORS.textMuted} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.dropdownContent}>
-                {options.map((option, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.dropdownOption,
-                      fields[key]?.value === option && styles.dropdownOptionSelected,
-                    ]}
-                    onPress={() => selectDropdownOption(key, option)}
-                  >
-                    <Text
-                      style={[
-                        styles.dropdownOptionText,
-                        fields[key]?.value === option && styles.dropdownOptionTextSelected,
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                    {fields[key]?.value === option && (
-                      <Icon name="check" size={16} color={COLORS.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+    return (
+      <View style={styles.fieldContainer}>
+        <View style={styles.fieldHeader}>
+          <Icon name={icon} size={16} color={COLORS.success} />
+          <Text style={styles.fieldLabel}>{label}</Text>
+          {validationErrors[key] && (
+            <Text style={styles.fieldError}>*</Text>
+          )}
+        </View>
+
+        <View style={styles.priceFieldContainer}>
+          {fields[key]?.editing ? (
+            <View style={styles.priceInputWrapper}>
+              <Text style={styles.currencyPrefix}>
+                {currentCurrency}
+              </Text>
+              <TextInput
+                style={[
+                  styles.priceInput,
+                  validationErrors[key] && styles.fieldInputError,
+                ]}
+                value={fields[key]?.value || ''}
+                onChangeText={text => {
+                  const numericText = text.replace(/[^0-9.]/g, '');
+                  onChangeText(key, numericText);
+                }}
+                keyboardType="decimal-pad"
+                onBlur={() => onBlur(key)}
+                placeholder="0.00"
+                placeholderTextColor={COLORS.textMuted}
+                autoFocus
+              />
             </View>
-          </TouchableOpacity>
-        </Modal>
-      </View>
-    </View>
-  );
-
-  const renderPriceField = (key, label, icon) => (
-    <View style={styles.fieldContainer}>
-      <View style={styles.fieldHeader}>
-        <Icon name={icon} size={16} color={COLORS.success} />
-        <Text style={styles.fieldLabel}>{label}</Text>
-        {validationErrors[key] && (
-          <Text style={styles.fieldError}>*</Text>
-        )}
-      </View>
-
-      <View style={styles.priceFieldContainer}>
-        {fields[key]?.editing ? (
-          <View style={styles.priceInputWrapper}>
-            <Text style={styles.currencyPrefix}>{fields.currency?.value}</Text>
-            <TextInput
+          ) : (
+            <TouchableOpacity
               style={[
-                styles.priceInput,
-                validationErrors[key] && styles.fieldInputError,
+                styles.priceDisplay,
+                validationErrors[key] && styles.fieldDisplayError,
               ]}
-              value={fields[key]?.value || ''}
-              onChangeText={text => {
-                const numericText = text.replace(/[^0-9.]/g, '');
-                onChangeText(key, numericText);
-              }}
-              keyboardType="decimal-pad"
-              onBlur={() => onBlur(key)}
-              placeholder="0.00"
-              placeholderTextColor={COLORS.textMuted}
-              autoFocus
-            />
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={[
-              styles.priceDisplay,
-              validationErrors[key] && styles.fieldDisplayError,
-            ]}
-            onPress={() => onEditPress(key)}
-          >
-            <Text style={styles.priceText}>
-              {fields.currency?.value} {parseFloat(fields[key]?.value || 0).toLocaleString()}
-            </Text>
-            <Icon name="edit-2" size={16} color={COLORS.textMuted} />
-          </TouchableOpacity>
+              onPress={() => onEditPress(key)}
+            >
+              <Text style={styles.priceText}>
+                {currentCurrency} {parseFloat(fields[key]?.value || 0).toLocaleString()}
+              </Text>
+              <Icon name="edit-2" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        {validationErrors[key] && (
+          <Text style={styles.errorText}>{validationErrors[key]}</Text>
         )}
       </View>
-      
-      {validationErrors[key] && (
-        <Text style={styles.errorText}>{validationErrors[key]}</Text>
-      )}
-    </View>
-  );
+    );
+  };
 
   if (isLoading) {
     return (
@@ -942,29 +980,67 @@ export default function EditProductScreen({ route, navigation }) {
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
-                {renderDropdownField('condition', 'Condition', 'shield-check', CONDITIONS)}
+                <View style={styles.fieldContainer}>
+                  <View style={styles.fieldHeader}>
+                    <Icon name="shield-check" size={16} color={COLORS.primary} />
+                    <Text style={styles.fieldLabel}>Condition</Text>
+                  </View>
+                  <CustomDropdown
+                    options={CONDITIONS}
+                    selectedValue={fields.condition?.value || ''}
+                    onSelect={(value) => onChangeText('condition', value)}
+                    placeholder="Select condition"
+                    label="Item Condition"
+                  />
+                </View>
               </View>
               <View style={styles.fieldHalf}>
-                {renderDropdownField('operation_status', 'Operation Status', 'activity', OPERATION_STATUS)}
+                <View style={styles.fieldContainer}>
+                  <View style={styles.fieldHeader}>
+                    <Icon name="activity" size={16} color={COLORS.primary} />
+                    <Text style={styles.fieldLabel}>Operation Status</Text>
+                  </View>
+                  <CustomDropdown
+                    options={OPERATION_STATUS}
+                    selectedValue={fields.operation_status?.value || ''}
+                    onSelect={(value) => onChangeText('operation_status', value)}
+                    placeholder="Select operation status"
+                    label="Operation Status"
+                  />
+                </View>
               </View>
             </View>
           </View>
         </Animated.View>
 
-        {/* Pricing Information */}
-        <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Pricing Information</Text>
-          <View style={styles.card}>
-            <View style={styles.fieldRow}>
-              <View style={styles.fieldHalf}>
-                {renderDropdownField('currency', 'Currency', 'dollar-sign', CURRENCIES)}
-              </View>
-              <View style={styles.fieldHalf}>
-                {renderPriceField('original_price', 'Price', 'tag')}
+        {/* Pricing Information - Only show for marketplace products */}
+        {fields.product_type?.value !== 'auction' && (
+          <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+            <Text style={styles.sectionTitle}>Pricing Information</Text>
+            <View style={styles.card}>
+              <View style={styles.fieldRow}>
+                <View style={styles.fieldHalf}>
+                  <View style={styles.fieldContainer}>
+                    <View style={styles.fieldHeader}>
+                      <Icon name="dollar-sign" size={16} color={COLORS.primary} />
+                      <Text style={styles.fieldLabel}>Currency</Text>
+                    </View>
+                    <CustomDropdown
+                      options={CURRENCIES}
+                      selectedValue={fields.currency?.value || ''}
+                      onSelect={(value) => onChangeText('currency', value)}
+                      placeholder="Select currency"
+                      label="Currency"
+                    />
+                  </View>
+                </View>
+                <View style={styles.fieldHalf}>
+                  {renderPriceField('original_price', 'Price', 'tag')}
+                </View>
               </View>
             </View>
-          </View>
-        </Animated.View>
+          </Animated.View>
+        )}
 
         {/* Product Type */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
@@ -1041,7 +1117,11 @@ export default function EditProductScreen({ route, navigation }) {
           <Text style={styles.sectionTitle}>Location & Category</Text>
           <View style={styles.card}>
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Category</Text>
+              <View style={styles.fieldHeader}>
+                <Icon name="list" size={16} color={COLORS.primary} />
+                <Text style={styles.fieldLabel}>Category</Text>
+              </View>
+              {console.log(fields,"fieldsfieldsfields" )}
               <CustomDropdown
                 options={categories.map(cat => cat.name)}
                 selectedValue={fields.parent_category?.value || ''}
@@ -1054,8 +1134,31 @@ export default function EditProductScreen({ route, navigation }) {
               />
             </View>
 
+            {/* Subcategory dropdown with proper conditional rendering */}
+            {/* {subCategories.length > 0 && ( */}
+              <View style={styles.fieldContainer}>
+                <View style={styles.fieldHeader}>
+                  <Icon name="tag" size={16} color={COLORS.primary} />
+                  <Text style={styles.fieldLabel}>Sub Category</Text>
+                </View>
+                {/* {console.log()} */}
+                
+                <CustomDropdown
+                  options={subCategories}
+                  selectedValue={fields.sub_category?.value || ''}
+                  onSelect={(value) => onChangeText('sub_category', value)}
+                  placeholder="Select subcategory"
+                  label="Product Subcategory"
+                  loading={loadingSubCategories}
+                />
+              </View>
+            {/* )} */}
+
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Location</Text>
+              <View style={styles.fieldHeader}>
+                <Icon name="map-pin" size={16} color={COLORS.primary} />
+                <Text style={styles.fieldLabel}>Location</Text>
+              </View>
               <CustomDropdown
                 options={locations}
                 selectedValue={fields.item_location?.value || ''}
@@ -1065,15 +1168,6 @@ export default function EditProductScreen({ route, navigation }) {
                 loading={loadingLocations}
               />
             </View>
-
-            {fields.sub_category?.value && (
-              <View style={styles.fieldContainer}>
-                <Text style={styles.fieldLabel}>Sub Category</Text>
-                <View style={styles.readOnlyField}>
-                  <Text style={styles.readOnlyText}>{fields.sub_category.value}</Text>
-                </View>
-              </View>
-            )}
           </View>
         </Animated.View>
 
@@ -1083,7 +1177,10 @@ export default function EditProductScreen({ route, navigation }) {
             <Text style={styles.sectionTitle}>Auction Settings</Text>
             <View style={styles.card}>
               <View style={styles.fieldContainer}>
-                <Text style={styles.fieldLabel}>Auction Group</Text>
+                <View style={styles.fieldHeader}>
+                  <Icon name="users" size={16} color={COLORS.primary} />
+                  <Text style={styles.fieldLabel}>Auction Group</Text>
+                </View>
                 <CustomDropdown
                   options={auctionGroups}
                   selectedValue={fields.auction_group?.value || ''}
@@ -1097,45 +1194,87 @@ export default function EditProductScreen({ route, navigation }) {
               <View style={styles.fieldRow}>
                 <View style={styles.fieldHalf}>
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.fieldLabel}>Start Date</Text>
+                    <View style={styles.fieldHeader}>
+                      <Icon name="calendar" size={16} color={COLORS.primary} />
+                      <Text style={styles.fieldLabel}>Start Date</Text>
+                    </View>
                     <CustomDateTimePicker
-                      value={fields.auction_start_date?.value ? new Date(fields.auction_start_date.value) : null}
-                      onChange={(iso) => onChangeText('auction_start_date', iso || '')}
+                      value={fields.auction_start_time?.value ? new Date(fields.auction_start_time.value) : null}
+                      onChange={(iso) => onChangeText('auction_start_time', iso || '')}
                       textStyle={styles.datePickerText}
                     />
-                    {validationErrors.auction_start_date && (
-                      <Text style={styles.errorText}>{validationErrors.auction_start_date}</Text>
+                    {validationErrors.auction_start_time && (
+                      <Text style={styles.errorText}>{validationErrors.auction_start_time}</Text>
                     )}
                   </View>
                 </View>
 
                 <View style={styles.fieldHalf}>
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.fieldLabel}>End Date</Text>
+                    <View style={styles.fieldHeader}>
+                      <Icon name="calendar" size={16} color={COLORS.primary} />
+                      <Text style={styles.fieldLabel}>End Date</Text>
+                    </View>
+                    {console.log(fields,"auction_end_timeauction_end_time")}
                     <CustomDateTimePicker
-                      value={fields.auction_end_date?.value ? new Date(fields.auction_end_date.value) : null}
-                      onChange={(iso) => onChangeText('auction_end_date', iso || '')}
+                      value={fields.auction_end_time?.value ? new Date(fields.auction_end_time.value) : null}
+                      onChange={(iso) => onChangeText('auction_end_time', iso || '')}
                       textStyle={styles.datePickerText}
                     />
-                    {validationErrors.auction_end_date && (
-                      <Text style={styles.errorText}>{validationErrors.auction_end_date}</Text>
+                    {validationErrors.auction_end_time && (
+                      <Text style={styles.errorText}>{validationErrors.auction_end_time}</Text>
                     )}
                   </View>
                 </View>
               </View>
 
-              <View style={styles.fieldRow}>
-                <View style={styles.fieldHalf}>
-                  {renderPriceField('auction_start_price', 'Starting Bid Price', 'trending-up')}
+              {/* Auction Currency dropdown */}
+              <View style={styles.fieldContainer}>
+                <View style={styles.fieldHeader}>
+                  <Icon name="dollar-sign" size={16} color={COLORS.warning} />
+                  <Text style={styles.fieldLabel}>Auction Currency</Text>
                 </View>
-                <View style={styles.fieldHalf}>
-                  {renderPriceField('reserve_price', 'Reserve Price (Optional)', 'shield')}
-                </View>
+                <CustomDropdown
+                  options={CURRENCIES}
+                  selectedValue={
+                    fields.auction_currency?.value ||
+                    fields.currency?.value ||
+                    'USD ($)'
+                  }
+                  onSelect={(value) => onChangeText('auction_currency', value)}
+                  placeholder="Select auction currency"
+                  label="Auction Currency"
+                  hasError={!!validationErrors.auction_currency}
+                />
+                {fields.currency?.value && (
+                  <Text style={styles.currencyInfo}>
+                    Based on listing currency: {fields.currency.value}
+                  </Text>
+                )}
+                {validationErrors.auction_currency && (
+                  <Text style={styles.errorText}>{validationErrors.auction_currency}</Text>
+                )}
               </View>
 
-              <View style={styles.fieldContainer}>
-                <Text style={styles.fieldLabel}>Auction Currency</Text>
-                {renderDropdownField('auction_currency', 'Auction Currency', 'dollar-sign', CURRENCIES)}
+              {/* Auction increment field */}
+              {/* <View style={styles.fieldContainer}>
+                <View style={styles.fieldHeader}>
+                  <Icon name="trending-up" size={16} color={COLORS.primary} />
+                  <Text style={styles.fieldLabel}>Bid Increment</Text>
+                </View>
+                {renderFieldInput('auction_increment', 'Bid Increment', 'trending-up', {
+                  keyboardType: 'decimal-pad',
+                  placeholder: 'Enter minimum bid increment',
+                })}
+              </View> */}
+
+              <View style={styles.fieldRow}>
+                <View style={styles.fieldHalf}>
+                  {renderPriceField('auction_start_price', 'Starting Bid Price', 'play-circle')}
+                </View>
+                <View style={styles.fieldHalf}>
+                  {renderPriceField('auction_reserve', 'Reserve Price', 'shield')}
+                </View>
               </View>
             </View>
           </Animated.View>
@@ -1219,7 +1358,11 @@ const styles = StyleSheet.create({
   // Header
   header: {
     backgroundColor: '#c0faf5',
-    // paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   headerContent: {
     flexDirection: 'row',
@@ -1231,6 +1374,8 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: scaleWidth(8),
+    borderRadius: scaleWidth(20),
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   headerText: {
     flex: 1,
@@ -1254,6 +1399,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: scaleWidth(8),
+    shadowColor: '#0d9488',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
 
   // Scroll View
@@ -1279,13 +1429,13 @@ const styles = StyleSheet.create({
   // Cards
   card: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: scaleWidth(12),
+    borderRadius: scaleWidth(16),
     padding: scaleWidth(20),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: scaleHeight(2) },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: scaleHeight(4) },
+    shadowOpacity: 0.08,
     shadowRadius: scaleHeight(8),
-    elevation: scaleHeight(3),
+    elevation: scaleHeight(4),
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -1428,7 +1578,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.light,
     paddingVertical: scaleHeight(12),
     paddingHorizontal: scaleWidth(16),
-    borderRadius: scaleWidth(8),
+    borderRadius: scaleWidth(12),
     borderWidth: 1,
     borderColor: COLORS.border,
     minHeight: scaleHeight(48),
@@ -1451,7 +1601,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackground,
     paddingVertical: scaleHeight(12),
     paddingHorizontal: scaleWidth(16),
-    borderRadius: scaleWidth(8),
+    borderRadius: scaleWidth(12),
     fontSize: scaleFont(14),
     fontFamily: FONTS.regular,
     color: COLORS.textPrimary,
@@ -1460,6 +1610,11 @@ const styles = StyleSheet.create({
   },
   fieldInputEditing: {
     borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   fieldInputError: {
     borderColor: COLORS.error,
@@ -1483,82 +1638,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.medium,
   },
 
-  // Read-only field
-  readOnlyField: {
-    backgroundColor: COLORS.light,
-    paddingVertical: scaleHeight(12),
-    paddingHorizontal: scaleWidth(16),
-    borderRadius: scaleWidth(8),
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  readOnlyText: {
-    fontSize: scaleFont(14),
-    fontFamily: FONTS.regular,
-    color: COLORS.textSecondary,
-  },
-
-  // Dropdown
-  dropdownOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: scaleWidth(20),
-  },
-  dropdownModal: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: scaleWidth(12),
-    width: '100%',
-    maxWidth: scaleWidth(300),
-    maxHeight: scaleHeight(400),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: scaleHeight(10) },
-    shadowOpacity: 0.25,
-    shadowRadius: scaleHeight(20),
-    elevation: scaleHeight(10),
-  },
-  dropdownHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: scaleHeight(16),
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  dropdownTitle: {
-    fontSize: scaleFont(16),
-    fontFamily: FONTS.semiBold,
-    color: COLORS.textPrimary,
-  },
-  dropdownCloseButton: {
-    padding: scaleHeight(4),
-  },
-  dropdownContent: {
-    maxHeight: scaleHeight(300),
-  },
-  dropdownOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: scaleHeight(12),
-    paddingHorizontal: scaleWidth(16),
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.light,
-  },
-  dropdownOptionSelected: {
-    backgroundColor: COLORS.light,
-  },
-  dropdownOptionText: {
-    fontSize: scaleFont(14),
-    fontFamily: FONTS.regular,
-    color: COLORS.textPrimary,
-  },
-  dropdownOptionTextSelected: {
-    color: COLORS.primary,
-    fontFamily: FONTS.medium,
-  },
-
   // Price Fields
   priceFieldContainer: {
     position: 'relative',
@@ -1567,10 +1646,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.cardBackground,
-    borderRadius: scaleWidth(8),
+    borderRadius: scaleWidth(12),
     borderWidth: 2,
     borderColor: COLORS.primary,
     overflow: 'hidden',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   currencyPrefix: {
     paddingHorizontal: scaleWidth(12),
@@ -1592,12 +1676,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.light,
+    backgroundColor: '#f0fdf4',
     paddingVertical: scaleHeight(12),
     paddingHorizontal: scaleWidth(16),
-    borderRadius: scaleWidth(8),
+    borderRadius: scaleWidth(12),
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#bbf7d0',
   },
   priceText: {
     flex: 1,
@@ -1614,11 +1698,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: scaleWidth(12),
-    paddingVertical: scaleHeight(12),
+    paddingVertical: scaleHeight(16),
     paddingHorizontal: scaleWidth(16),
-    borderWidth: scale(1),
+    borderWidth: scale(2),
     borderColor: '#e5e7eb',
-    borderRadius: scale(12),
+    borderRadius: scale(16),
     backgroundColor: '#fff',
   },
   productTypeButtonActive: {
@@ -1626,9 +1710,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#eef2ff',
   },
   productTypeIcon: {
-    width: scaleWidth(36),
-    height: scaleWidth(36),
-    borderRadius: scale(18),
+    width: scaleWidth(40),
+    height: scaleWidth(40),
+    borderRadius: scale(20),
     backgroundColor: '#f3f4f6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1640,13 +1724,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   productTypeTitle: {
-    fontSize: scaleFont(14),
+    fontSize: scaleFont(15),
     fontWeight: '600',
     color: '#6b7280',
     fontFamily: FONTS.medium,
   },
   productTypeTextActive: {
     color: '#6366f1',
+    fontFamily: FONTS.semiBold,
   },
   productTypeDescription: {
     fontSize: scaleFont(12),
@@ -1660,6 +1745,14 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(14),
     color: COLORS.textPrimary,
     fontFamily: FONTS.regular,
+  },
+
+  // Currency Info
+  currencyInfo: {
+    fontSize: scaleFont(12),
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+    marginTop: scaleHeight(4),
   },
 
   // Media Upload
@@ -1682,13 +1775,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     paddingVertical: scaleHeight(16),
-    borderRadius: scaleWidth(12),
+    borderRadius: scaleWidth(16),
     gap: scaleWidth(8),
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: scaleHeight(4) },
-    shadowOpacity: 0.2,
-    shadowRadius: scaleHeight(8),
-    elevation: scaleHeight(6),
+    shadowOffset: { width: 0, height: scaleHeight(6) },
+    shadowOpacity: 0.25,
+    shadowRadius: scaleHeight(12),
+    elevation: scaleHeight(8),
   },
   submitButtonDisabled: {
     backgroundColor: COLORS.textMuted,

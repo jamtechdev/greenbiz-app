@@ -1363,60 +1363,64 @@ export default function DetailModal({
             </TouchableOpacity>
 
             {/* Save to Marketplace Button */}
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.marketplaceButton,
-                // isButtonDisabled('submit_market') && styles.buttonDisabled
-              ]}
-              onPress={() => handleSubmission('submit_market')}
-              // disabled={isButtonDisabled('submit_market')}
-            >
-              {isSubmitting && submissionType === 'submit_market' ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Icon name="shopping-bag" size={14} color="#fff" />
-              )}
-              <Text
+            {productType === 'Marketplace' && (
+              <TouchableOpacity
                 style={[
-                  styles.actionButtonText,
-                  styles.marketplaceButtonText,
-                  // isButtonDisabled('submit_market') && styles.buttonTextDisabled
+                  styles.actionButton,
+                  styles.marketplaceButton,
+                  // isButtonDisabled('submit_market') && styles.buttonDisabled
                 ]}
+                onPress={() => handleSubmission('submit_market')}
+                // disabled={isButtonDisabled('submit_market')}
               >
-                {isSubmitting && submissionType === 'submit_market'
-                  ? 'Submitting...'
-                  : 'Marketplace'}
-              </Text>
-            </TouchableOpacity>
+                {isSubmitting && submissionType === 'submit_market' ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Icon name="shopping-bag" size={14} color="#fff" />
+                )}
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    styles.marketplaceButtonText,
+                    // isButtonDisabled('submit_market') && styles.buttonTextDisabled
+                  ]}
+                >
+                  {isSubmitting && submissionType === 'submit_market'
+                    ? 'Submitting...'
+                    : 'Marketplace'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
-            {/* Save to Auction Button */}
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.auctionButton,
-                // isButtonDisabled('submit_auction') && styles.buttonDisabled
-              ]}
-              onPress={() => handleSubmission('submit_auction')}
-              // disabled={isButtonDisabled('submit_auction')}
-            >
-              {isSubmitting && submissionType === 'submit_auction' ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Icon name="zap" size={14} color="#fff" />
-              )}
-              <Text
+            {productType === 'Auction' && (
+              <TouchableOpacity
                 style={[
-                  styles.actionButtonText,
-                  styles.auctionButtonText,
-                  // isButtonDisabled('submit_auction') && styles.buttonTextDisabled
+                  styles.actionButton,
+                  styles.auctionButton,
+                  // isButtonDisabled('submit_auction') && styles.buttonDisabled
                 ]}
+                onPress={() => handleSubmission('submit_auction')}
+                // disabled={isButtonDisabled('submit_auction')}
               >
-                {isSubmitting && submissionType === 'submit_auction'
-                  ? 'Submitting...'
-                  : 'Save Auction'}
-              </Text>
-            </TouchableOpacity>
+                {isSubmitting && submissionType === 'submit_auction' ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Icon name="zap" size={14} color="#fff" />
+                )}
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    styles.auctionButtonText,
+                    // isButtonDisabled('submit_auction') && styles.buttonTextDisabled
+                  ]}
+                >
+                  {isSubmitting && submissionType === 'submit_auction'
+                    ? 'Submitting...'
+                    : 'Save Auction'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {/* Save to Auction Button */}
           </View>
         </View>
       </SafeAreaView>
@@ -1564,7 +1568,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: scaleWidth(12),
   },
   halfWidth: {
@@ -1572,7 +1576,7 @@ const styles = StyleSheet.create({
   },
   datePickerWrapper: {
     backgroundColor: '#fff',
-    paddingHorizontal: scaleWidth(4),
+    // paddingHorizontal: scaleWidth(4),
   },
   datePickerError: {
     borderWidth: scale(1),

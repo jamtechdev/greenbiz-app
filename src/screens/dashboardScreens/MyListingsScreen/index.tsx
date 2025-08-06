@@ -534,6 +534,7 @@ export default function MyListingsScreen({ navigation }) {
                             {item.price && (
                               <View style={styles.tag}>
                                 <Text style={styles.tagText}>
+                                  {item.currency || 'USD'} {""}
                                   {item.price
                                     ? `${item.price}`
                                     : 'Price on request'}

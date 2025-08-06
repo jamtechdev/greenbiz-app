@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,12 @@ import CameraOverlay from '../../../components/CameraOverlay';
 import { useAppContext } from '../../../_customContext/AppProvider';
 import { clearAnalysis } from '../../../store/slices/analysisSlice';
 import { apiService } from '../../../api/axiosConfig';
-import { scale, scaleFont, scaleHeight, scaleWidth } from '../../../utils/resposive';
+import {
+  scale,
+  scaleFont,
+  scaleHeight,
+  scaleWidth,
+} from '../../../utils/resposive';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +43,10 @@ export default function DashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [isUnauthorized, setIsUnauthorized] = useState(false);
+
+  // Carousel specific state
+  const carouselRef = useRef(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   // Redux selectors
   const {
@@ -123,8 +132,136 @@ export default function DashboardScreen({ navigation }) {
     if (isAuthenticated) {
       await loadListings();
     }
-
     setRefreshing(false);
+  };
+
+  // Auto-scroll effect for carousel
+  useEffect(() => {
+    if (listings.length > 1) {
+      const interval = setInterval(() => {
+        if (carouselRef.current) {
+          const nextIndex = (currentIndex + 1) % listings.length;
+          carouselRef.current.scrollToIndex({
+            index: nextIndex,
+            animated: true,
+          });
+          setCurrentIndex(nextIndex);
+        }
+      }, 4000); // Auto-scroll every 4 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [currentIndex, listings.length]);
+
+  // Handle manual scroll end
+  const handleScrollEnd = (event) => {
+    const contentOffset = event.nativeEvent.contentOffset.x;
+    const cardWidth = scaleWidth(280) + scaleWidth(16); // Card width + margin
+    const pageNum = Math.floor(contentOffset / cardWidth);
+    
+    if (pageNum >= 0 && pageNum < listings.length) {
+      setCurrentIndex(pageNum);
+    }
+  };
+
+  // Carousel item renderer
+  const renderCarouselItem = ({ item, index }) => (
+    <TouchableOpacity
+      style={styles.carouselCard}
+      onPress={() =>
+        navigation.navigate('ProductDetailsById', { productId: item.ID })
+      }
+      activeOpacity={0.95}
+    >
+      <View style={styles.cardImageContainer}>
+        {item.thumbnail || item.featured_image ? (
+          <Image
+            source={{ uri: item.thumbnail || item.featured_image }}
+            style={styles.cardImage}
+            resizeMode="contain"
+            onError={error => {
+              console.log('Image load error:', error);
+            }}
+          />
+        ) : (
+          <View style={styles.cardImagePlaceholder}>
+            <Icon name="camera" size={32} color="#94a3b8" />
+            <Text style={styles.placeholderText}>No Image</Text>
+          </View>
+        )}
+
+        {/* Enhanced Status Badge */}
+        <View style={[styles.statusBadge, getStatusBadgeStyle(item.status)]}>
+          <Text style={styles.statusBadgeText}>
+            {getStatusText(item.status)}
+          </Text>
+        </View>
+
+        {/* Favorite Button */}
+        <TouchableOpacity style={styles.favoriteButton}>
+          <Icon name="heart" size={18} color="#e11d48" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle} numberOfLines={2}>
+          {item.title || item.name || 'Untitled Machine'}
+        </Text>
+
+        <View style={styles.cardMeta}>
+          <Icon name="tag" size={14} color="#6366f1" />
+          <Text style={styles.cardMetaText} numberOfLines={1}>
+            {item.type
+              ? Array.isArray(item.type)
+                ? item.type.join(', ')
+                : item.type
+              : 'Equipment'}
+          </Text>
+        </View>
+
+        <View style={styles.cardFooter}>
+          <View style={styles.priceContainer}>
+            <Text style={styles.cardPrice}>
+              ${formatPrice(item.price) || '0'}
+            </Text>
+            <Text style={styles.cardPriceLabel}>USD</Text>
+          </View>
+
+          <View style={styles.cardActions}>
+            <TouchableOpacity style={styles.actionIcon}>
+              <Icon name="eye" size={16} color="#6366f1" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionIcon}>
+              <Icon name="bookmark" size={16} color="#6366f1" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.cardBottom}>
+          <Text style={styles.cardId}>ID: {item.ID}</Text>
+          <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  // Pagination dots component
+  const CarouselPagination = ({ data, currentIndex }) => {
+    if (!data || data.length <= 1) return null;
+    
+    return (
+      <View style={styles.paginationContainer}>
+        {data.map((_, index) => (
+          <View
+            key={index}
+            style={[
+              styles.paginationDot,
+              index === currentIndex && styles.paginationDotActive,
+            ]}
+          />
+        ))}
+      </View>
+    );
   };
 
   const handleGalleryPick = () => {
@@ -176,26 +313,18 @@ export default function DashboardScreen({ navigation }) {
   // Clear previous analysis when overlay opens
   const handleScanMachinePress = () => {
     console.log('🗑️ Clearing previous analysis data...');
-
-    // Clear Redux state
     dispatch(clearAnalysis());
-
-    // Clear local state
     setSelectedImages([]);
     setIsAnalyzing(false);
     setAnalysisProgress('');
-
-    // Open overlay
     setShowOverlay(true);
   };
 
-  // Simplified API call - only Method 2 (FormData with files)
   const analyzeImagesManually = async imagePaths => {
     try {
       setIsAnalyzing(true);
       setAnalysisProgress('Starting new analysis...');
 
-      // Clear any existing analysis data before starting
       console.log('🗑️ Clearing previous analysis before new analysis...');
       dispatch(clearAnalysis());
 
@@ -203,7 +332,6 @@ export default function DashboardScreen({ navigation }) {
 
       setAnalysisProgress('Sending images to AI analysis...');
 
-      // Only Method 2: FormData with file objects
       console.log('🔄 Using FormData with files method...');
 
       const formData = new FormData();
@@ -234,15 +362,13 @@ export default function DashboardScreen({ navigation }) {
         setIsAnalyzing(false);
         setShowOverlay(false);
 
-        // Navigate with the NEW response data
         navigation.navigate('Details', {
           images: imagePaths,
           imageCount: imagePaths.length,
           analysisData: data,
-          timestamp: Date.now(), // Add timestamp to force refresh
+          timestamp: Date.now(),
         });
         if (isAuthenticated) {
-          // Reload listings after successful analysis
           loadListings();
         }
       } else {
@@ -271,8 +397,6 @@ export default function DashboardScreen({ navigation }) {
   const handleImagesComplete = async images => {
     console.log('📸 New images selected:', images);
     setSelectedImages(images);
-
-    // Start fresh analysis with new images
     await analyzeImagesManually(images);
   };
 
@@ -317,89 +441,7 @@ export default function DashboardScreen({ navigation }) {
     dispatch(clearAnalysis());
   }, [dispatch]);
 
-  const renderListingItem = ({ item, index }) => (
-    <TouchableOpacity
-      style={[
-        styles.enhancedListingCard,
-        { marginLeft: index % 2 === 0 ? 0 : 8 },
-      ]}
-     onPress={() =>
-      navigation.navigate('ProductDetailsById', { productId: item.ID })
-    }
-      activeOpacity={0.8}
-    >
-      <View style={styles.cardImageContainer}>
-        {item.thumbnail || item.featured_image ? (
-          <Image
-            source={{ uri: item.thumbnail || item.featured_image }}
-            style={styles.cardImage}
-            resizeMode="contain"
-            onError={error => {
-              console.log('Image load error:', error);
-            }}
-          />
-        ) : (
-          <View style={styles.cardImagePlaceholder}>
-            <Icon name="camera" size={24} color="#94a3b8" />
-            <Text style={styles.placeholderText}>No Image</Text>
-          </View>
-        )}
-
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, getStatusBadgeStyle(item.status)]}>
-          <Text style={styles.statusBadgeText}>
-            {getStatusText(item.status)}
-          </Text>
-        </View>
-
-        {/* Heart Icon */}
-        {/* <TouchableOpacity style={styles.heartButton}>
-          <Icon name="heart" size={16} color="#e11d48" />
-        </TouchableOpacity> */}
-      </View>
-
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {item.title || item.name || 'Untitled Machine'}
-        </Text>
-
-        <View style={styles.cardMeta}>
-          <Icon name="tag" size={12} color="#64748b" />
-          <Text style={styles.cardMetaText} numberOfLines={1}>
-            {item.type
-              ? Array.isArray(item.type)
-                ? item.type.join(', ')
-                : item.type
-              : 'Equipment'}
-          </Text>
-        </View>
-
-        <View style={styles.cardFooter}>
-          <View style={styles.priceContainer}>
-            <Text style={styles.cardPrice}>
-              ${formatPrice(item.price) || '0'}
-            </Text>
-            <Text style={styles.cardPriceLabel}>USD</Text>
-          </View>
-
-          <View style={styles.cardActions}>
-            <TouchableOpacity style={styles.actionIcon}>
-              <Icon name="eye" size={14} color="#64748b" />
-            </TouchableOpacity>
-            {/* <TouchableOpacity style={styles.actionIcon}>
-              <Icon name="share-2" size={14} color="#64748b" />
-            </TouchableOpacity> */}
-          </View>
-        </View>
-
-        <View style={styles.cardBottom}>
-          <Text style={styles.cardId}>ID: {item.ID}</Text>
-          <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
+  // Helper functions
   const getStatusBadgeStyle = status => {
     switch (status?.toLowerCase()) {
       case 'published':
@@ -658,13 +700,11 @@ export default function DashboardScreen({ navigation }) {
               </View>
             </View>
 
-            {/* Enhanced Machine Cards */}
+            {/* Enhanced Machine Carousel */}
             <View style={styles.listingsSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Recent Machines</Text>
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('MyList')}
-                >
+                <TouchableOpacity onPress={() => navigation.navigate('MyList')}>
                   <Text style={styles.seeAllText}>View All</Text>
                 </TouchableOpacity>
               </View>
@@ -675,18 +715,71 @@ export default function DashboardScreen({ navigation }) {
                   <Text style={styles.loadingText}>Loading machines...</Text>
                 </View>
               ) : listings.length > 0 ? (
-                <FlatList
-                  data={listings.slice(0, 6)}
-                  renderItem={renderListingItem}
-                  keyExtractor={item =>
-                    item.ID?.toString() || Math.random().toString()
-                  }
-                  numColumns={2}
-                  showsVerticalScrollIndicator={false}
-                  scrollEnabled={false}
-                  columnWrapperStyle={styles.cardRow}
-                  ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
-                />
+                <View style={styles.carouselWrapper}>
+                  <FlatList
+                    ref={carouselRef}
+                    data={listings.slice(0, 10)}
+                    renderItem={renderCarouselItem}
+                    keyExtractor={item =>
+                      item.ID?.toString() || Math.random().toString()
+                    }
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    pagingEnabled={false}
+                    decelerationRate="fast"
+                    snapToInterval={scaleWidth(280) + scaleWidth(16)}
+                    snapToAlignment="start"
+                    contentContainerStyle={styles.carouselContent}
+                    onMomentumScrollEnd={handleScrollEnd}
+                    onScrollToIndexFailed={() => {
+                      console.log('Carousel scroll to index failed');
+                    }}
+                    getItemLayout={(data, index) => ({
+                      length: scaleWidth(280) + scaleWidth(16),
+                      offset: (scaleWidth(280) + scaleWidth(16)) * index,
+                      index,
+                    })}
+                  />
+                  
+                  {/* Pagination Dots */}
+                  <CarouselPagination 
+                    data={listings.slice(0, 10)} 
+                    currentIndex={currentIndex} 
+                  />
+                  
+                  {/* Manual Navigation Arrows */}
+                  {listings.length > 1 && (
+                    <View style={styles.navigationArrows}>
+                      <TouchableOpacity
+                        style={[styles.navArrow, styles.navArrowLeft]}
+                        onPress={() => {
+                          const prevIndex = currentIndex === 0 ? listings.length - 1 : currentIndex - 1;
+                          carouselRef.current?.scrollToIndex({
+                            index: prevIndex,
+                            animated: true,
+                          });
+                          setCurrentIndex(prevIndex);
+                        }}
+                      >
+                        <Icon name="chevron-left" size={20} color="#6366f1" />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={[styles.navArrow, styles.navArrowRight]}
+                        onPress={() => {
+                          const nextIndex = (currentIndex + 1) % listings.length;
+                          carouselRef.current?.scrollToIndex({
+                            index: nextIndex,
+                            animated: true,
+                          });
+                          setCurrentIndex(nextIndex);
+                        }}
+                      >
+                        <Icon name="chevron-right" size={20} color="#6366f1" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               ) : (
                 renderEmptyListings()
               )}
@@ -910,6 +1003,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Medium',
   },
 
+  // Carousel specific styles
   listingsSection: {
     paddingHorizontal: scaleWidth(16),
     marginBottom: scaleHeight(32),
@@ -918,241 +1012,338 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: scaleHeight(16),
+    marginBottom: scaleHeight(20),
     paddingHorizontal: scaleWidth(4),
   },
   seeAllText: {
     fontSize: scaleFont(14),
     color: '#6366f1',
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '700',
+    fontFamily: 'Poppins-Bold',
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(8),
+    backgroundColor: '#f0f0ff',
+    borderRadius: scale(20),
   },
 
-  cardRow: {
-    justifyContent: 'space-between',
-    paddingHorizontal: scaleWidth(4),
+  // Carousel wrapper and content
+  carouselWrapper: {
+    position: 'relative',
   },
-  enhancedListingCard: {
+  carouselContent: {
+    paddingHorizontal: scaleWidth(16),
+    paddingBottom: scaleHeight(20),
+  },
+  carouselCard: {
     backgroundColor: '#fff',
-    marginBottom: scaleHeight(10),
-    borderRadius: scale(16),
-    width: scaleWidth((width - 48) / 2), // use scaleWidth for cards
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: scaleHeight(4) },
-    shadowOpacity: 0.08,
-    shadowRadius: scale(8),
-    elevation: 4,
+    borderRadius: scale(20),
+    width: scaleWidth(280),
+    marginRight: scaleWidth(16),
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: scaleHeight(8) },
+    shadowOpacity: 0.15,
+    shadowRadius: scale(16),
+    elevation: 8,
     overflow: 'hidden',
+    borderWidth: scale(1),
+    borderColor: 'rgba(99, 102, 241, 0.08)',
   },
+
+  // Card components
   cardImageContainer: {
     position: 'relative',
-    height: scaleHeight(140),
+    height: scaleHeight(180),
+    backgroundColor: '#f8fafc',
   },
   cardImage: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#f3f4f6',
+    borderTopLeftRadius: scale(20),
+    borderTopRightRadius: scale(20),
   },
   cardImagePlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: scale(1),
-    borderBottomColor: '#e2e8f0',
+    borderTopLeftRadius: scale(20),
+    borderTopRightRadius: scale(20),
   },
   placeholderText: {
-    fontSize: scaleFont(10),
+    fontSize: scaleFont(12),
     color: '#94a3b8',
-    marginTop: scaleHeight(4),
-    fontFamily: 'Poppins-Regular',
+    marginTop: scaleHeight(8),
+    fontFamily: 'Poppins-Medium',
   },
+
   statusBadge: {
     position: 'absolute',
-    top: scaleHeight(8),
-    left: scaleWidth(8),
-    paddingHorizontal: scaleWidth(8),
-    paddingVertical: scaleHeight(4),
-    borderRadius: scale(12),
+    top: scaleHeight(12),
+    left: scaleWidth(12),
+    paddingHorizontal: scaleWidth(10),
+    paddingVertical: scaleHeight(6),
+    borderRadius: scale(16),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: scaleHeight(2) },
-    shadowOpacity: 0.1,
-    shadowRadius: scale(2),
-    elevation: 2,
+    shadowOffset: { width: 0, height: scaleHeight(4) },
+    shadowOpacity: 0.2,
+    shadowRadius: scale(6),
+    elevation: 4,
   },
   statusBadgeText: {
     color: '#fff',
-    fontSize: scaleFont(10),
-    fontWeight: '600',
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: scaleFont(11),
+    fontWeight: '700',
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.5,
   },
-  heartButton: {
+
+  favoriteButton: {
     position: 'absolute',
-    top: scaleHeight(8),
-    right: scaleWidth(8),
-    width: scaleWidth(28),
-    height: scaleWidth(28),
-    borderRadius: scale(14),
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    top: scaleHeight(12),
+    right: scaleWidth(12),
+    width: scaleWidth(36),
+    height: scaleWidth(36),
+    borderRadius: scale(18),
+    backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: scaleHeight(2) },
-    shadowOpacity: 0.1,
-    shadowRadius: scale(2),
-    elevation: 2,
+    shadowOffset: { width: 0, height: scaleHeight(4) },
+    shadowOpacity: 0.15,
+    shadowRadius: scale(6),
+    elevation: 4,
   },
+
   cardContent: {
-    padding: scale(12),
-  
+    padding: scale(16),
   },
   cardTitle: {
-    fontSize: scaleFont(14),
-    fontWeight: '600',
+    fontSize: scaleFont(16),
+    fontWeight: '700',
     color: '#111827',
-    fontFamily: 'Poppins-SemiBold',
-    marginBottom: scaleHeight(6),
-    lineHeight: scaleHeight(18),
+    fontFamily: 'Poppins-Bold',
+    marginBottom: scaleHeight(8),
+    lineHeight: scaleHeight(22),
   },
+
   cardMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: scaleHeight(8),
+    marginBottom: scaleHeight(12),
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: scaleWidth(10),
+    paddingVertical: scaleHeight(6),
+    borderRadius: scale(12),
   },
   cardMetaText: {
-    fontSize: scaleFont(11),
+    fontSize: scaleFont(13),
     color: '#64748b',
-    fontFamily: 'Poppins-Regular',
-    marginLeft: scaleWidth(4),
+    fontFamily: 'Poppins-SemiBold',
+    marginLeft: scaleWidth(6),
     flex: 1,
   },
+
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: scaleHeight(8),
+    marginBottom: scaleHeight(12),
   },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: scaleWidth(10),
+    paddingVertical: scaleHeight(6),
+    borderRadius: scale(8),
   },
   cardPrice: {
-    fontSize: scaleFont(16),
-    fontWeight: '700',
-    color: '#10b981',
-    fontFamily: 'Poppins-Bold',
+    fontSize: scaleFont(18),
+    fontWeight: '800',
+    color: '#059669',
+    fontFamily: 'Poppins-ExtraBold',
   },
   cardPriceLabel: {
-    fontSize: scaleFont(10),
-    color: '#64748b',
-    fontFamily: 'Poppins-Regular',
-    marginLeft: scaleWidth(2),
+    fontSize: scaleFont(11),
+    color: '#047857',
+    fontFamily: 'Poppins-Bold',
+    marginLeft: scaleWidth(4),
   },
+
   cardActions: {
     flexDirection: 'row',
     gap: scaleWidth(8),
   },
   actionIcon: {
-    width: scaleWidth(24),
-    height: scaleWidth(24),
-    borderRadius: scale(12),
+    width: scaleWidth(32),
+    height: scaleWidth(32),
+    borderRadius: scale(16),
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: scale(1),
+    borderColor: '#e2e8f0',
   },
+
   cardBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: scaleHeight(8),
+    paddingTop: scaleHeight(12),
     borderTopWidth: scale(1),
     borderTopColor: '#f1f5f9',
   },
   cardId: {
-    fontSize: scaleFont(10),
+    fontSize: scaleFont(11),
     color: '#94a3b8',
-    fontFamily: 'Poppins-Regular',
+    fontFamily: 'Poppins-SemiBold',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: scaleWidth(8),
+    paddingVertical: scaleHeight(4),
+    borderRadius: scale(6),
   },
   cardDate: {
-    fontSize: scaleFont(10),
-    color: '#94a3b8',
-    fontFamily: 'Poppins-Regular',
+    fontSize: scaleFont(11),
+    color: '#6366f1',
+    fontFamily: 'Poppins-SemiBold',
   },
 
+  // Pagination dots
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: scaleHeight(16),
+    gap: scaleWidth(8),
+  },
+  paginationDot: {
+    width: scaleWidth(8),
+    height: scaleWidth(8),
+    borderRadius: scale(4),
+    backgroundColor: '#e2e8f0',
+    transition: 'all 0.3s ease',
+  },
+  paginationDotActive: {
+    backgroundColor: '#6366f1',
+    width: scaleWidth(20),
+    borderRadius: scale(4),
+  },
+
+  // Navigation arrows
+  navigationArrows: {
+    position: 'absolute',
+    top: '35%',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: scaleWidth(8),
+    pointerEvents: 'box-none',
+  },
+  navArrow: {
+    width: scaleWidth(40),
+    height: scaleWidth(40),
+    borderRadius: scale(20),
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: scaleHeight(4) },
+    shadowOpacity: 0.15,
+    shadowRadius: scale(8),
+    elevation: 4,
+    borderWidth: scale(1),
+    borderColor: '#e2e8f0',
+  },
+  navArrowLeft: {
+    marginLeft: scaleWidth(8),
+  },
+  navArrowRight: {
+    marginRight: scaleWidth(8),
+  },
+
+  // Empty state
   emptyState: {
     alignItems: 'center',
-    paddingVertical: scaleHeight(48),
+    paddingVertical: scaleHeight(56),
     paddingHorizontal: scaleWidth(24),
     backgroundColor: '#fff',
-    borderRadius: scale(16),
+    borderRadius: scale(24),
     marginHorizontal: scaleWidth(4),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: scaleHeight(2) },
-    shadowOpacity: 0.05,
-    shadowRadius: scale(4),
-    elevation: 2,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: scaleHeight(8) },
+    shadowOpacity: 0.1,
+    shadowRadius: scale(16),
+    elevation: 8,
   },
   emptyIconContainer: {
-    width: scaleWidth(64),
-    height: scaleWidth(64),
-    borderRadius: scale(32),
+    width: scaleWidth(80),
+    height: scaleWidth(80),
+    borderRadius: scale(40),
     backgroundColor: '#f0f0ff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: scaleHeight(16),
+    marginBottom: scaleHeight(20),
   },
   emptyTitle: {
-    fontSize: scaleFont(18),
-    fontWeight: '600',
+    fontSize: scaleFont(20),
+    fontWeight: '800',
     color: '#374151',
-    fontFamily: 'Poppins-SemiBold',
-    marginBottom: scaleHeight(8),
+    fontFamily: 'Poppins-ExtraBold',
+    marginBottom: scaleHeight(12),
     textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: scaleFont(14),
+    fontSize: scaleFont(15),
     color: '#6b7280',
     textAlign: 'center',
-    lineHeight: scaleHeight(20),
-    fontFamily: 'Poppins-Regular',
-    marginBottom: scaleHeight(24),
+    lineHeight: scaleHeight(22),
+    fontFamily: 'Poppins-Medium',
+    marginBottom: scaleHeight(28),
   },
   emptyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#6366f1',
-    paddingHorizontal: scaleWidth(20),
-    paddingVertical: scaleHeight(12),
-    borderRadius: scale(8),
-    gap: scaleWidth(8),
+    paddingHorizontal: scaleWidth(24),
+    paddingVertical: scaleHeight(16),
+    borderRadius: scale(12),
+    gap: scaleWidth(10),
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: scaleHeight(6) },
+    shadowOpacity: 0.3,
+    shadowRadius: scale(12),
+    elevation: 6,
   },
   emptyButtonText: {
     color: '#fff',
-    fontSize: scaleFont(14),
-    fontWeight: '600',
+    fontSize: scaleFont(16),
+    fontWeight: '700',
+    fontFamily: 'Poppins-Bold',
+  },
+
+  // Loading state
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: scaleHeight(48),
+    backgroundColor: '#fff',
+    borderRadius: scale(24),
+    marginHorizontal: scaleWidth(4),
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: scaleHeight(8) },
+    shadowOpacity: 0.1,
+    shadowRadius: scale(16),
+    elevation: 8,
+  },
+  loadingText: {
+    fontSize: scaleFont(16),
+    color: '#6366f1',
+    marginTop: scaleHeight(16),
     fontFamily: 'Poppins-SemiBold',
   },
 
-  loadingContainer: {
-    alignItems: 'center',
-    paddingVertical: scaleHeight(40),
-    backgroundColor: '#fff',
-    borderRadius: scale(16),
-    marginHorizontal: scaleWidth(4),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: scaleHeight(2) },
-    shadowOpacity: 0.05,
-    shadowRadius: scale(4),
-    elevation: 2,
-  },
-  loadingText: {
-    fontSize: scaleFont(14),
-    color: '#6b7280',
-    marginTop: scaleHeight(12),
-    fontFamily: 'Poppins-Regular',
-  },
-
+  // Analysis modal
   analysisOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',

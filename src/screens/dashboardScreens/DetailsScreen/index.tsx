@@ -1057,7 +1057,7 @@ const styles = StyleSheet.create({
   // Header
   header: {
     backgroundColor: '#c0faf5',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    // paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   headerContent: {
     flexDirection: 'row',

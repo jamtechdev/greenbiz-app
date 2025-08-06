@@ -610,9 +610,10 @@ const styles = StyleSheet.create({
   },
 
   inputText: {
-    fontSize: 12,
+    fontSize: 14,
     color: COLORS.text,
     fontWeight: '500',
+    fontFamily:"Poppins-Regular",
     flex: 1,
   },
 
