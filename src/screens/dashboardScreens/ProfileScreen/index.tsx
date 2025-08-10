@@ -25,7 +25,10 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
+import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
 import BottomNav from '../../../components/BottomNavbar';
+import LanguageSelector from '../../../components/LanguageSelector';
 import { useAppContext } from '../../../_customContext/AppProvider';
 import PhoneInput, {
   getCompletePhoneNumber,
@@ -38,6 +41,10 @@ import {
   ImageLibraryOptions,
   Asset,
 } from 'react-native-image-picker';
+import {
+  selectCurrentLanguage,
+  selectIsLanguageInitialized 
+} from '../../../store/slices/languageSlice';
 
 // Enhanced responsive utilities
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -48,7 +55,7 @@ const isSmallDevice = screenWidth < 375;
 const isLargeDevice = screenWidth > 414;
 
 // Enhanced scaling function
-const scale = (size: number) => {
+const scale = (size) => {
   const baseWidth = 375; // iPhone X/11/12 base width
   const scaleFactor = screenWidth / baseWidth;
   const newSize = size * scaleFactor;
@@ -59,19 +66,19 @@ const scale = (size: number) => {
   return newSize;
 };
 
-const scaleFont = (size: number) => {
+const scaleFont = (size) => {
   const scaledSize = scale(size);
   // Font boundaries for readability
   return Math.max(Math.min(scaledSize, size * 1.2), size * 0.8);
 };
 
-const scaleHeight = (size: number) => {
+const scaleHeight = (size) => {
   const baseHeight = 812; // iPhone X/11/12 base height
   const scaleFactor = screenHeight / baseHeight;
   return size * scaleFactor;
 };
 
-const scaleWidth = (size: number) => scale(size);
+const scaleWidth = (size) => scale(size);
 
 // Responsive spacing
 const spacing = {
@@ -106,35 +113,17 @@ const dimensions = {
   },
 };
 
-interface FormData {
-  first_name: string;
-  last_name: string;
-  username: string;
-  email: string;
-  billing_phone: string;
-  billing_country: string;
-  company: string;
-  role: string;
-  business_type: string;
-  user_type: string;
-  phoneCountryCode: string;
-  phoneNumber: string;
-  profile_picture_uri: string; // local URI for preview (newly selected)
-  profile_picture_url?: string; // server URL for existing image
-  profile_img?: string; // API response field name
-  profile_picture_file?: Asset;
-}
-
-interface ProfileScreenProps {
-  navigation: any;
-}
-
-export default function ProfileScreen({ navigation }: ProfileScreenProps) {
+export default function ProfileScreen({ navigation }) {
+  const { t } = useTranslation();
   const { showOverlay, setShowOverlay } = useAppContext();
   const { alertConfig, hideAlert, showSuccess, showError, showConfirm } =
     useCustomAlert();
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  // Redux selectors
+  const currentLanguage = useSelector(selectCurrentLanguage);
+  const isLanguageInitialized = useSelector(selectIsLanguageInitialized);
+
+  const scrollViewRef = useRef(null);
   const mountedRef = useRef(true);
 
   const [editing, setEditing] = useState(false);
@@ -142,7 +131,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const initialForm: FormData = {
+  const initialForm = {
     first_name: '',
     last_name: '',
     username: '',
@@ -160,8 +149,18 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     profile_img: '',
     profile_picture_file: undefined,
   };
-  const [form, setForm] = useState<FormData>(initialForm);
-  const [originalForm, setOriginalForm] = useState<FormData>(initialForm);
+  const [form, setForm] = useState(initialForm);
+  const [originalForm, setOriginalForm] = useState(initialForm);
+
+  // Show loading if language is not initialized
+  if (!isLanguageInitialized) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#00c0a2" />
+        <Text style={styles.loadingText}>Initializing...</Text>
+      </View>
+    );
+  }
 
   // Memoized display values
   const initials = useMemo(() => {
@@ -214,7 +213,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   ]);
 
   const pickImage = useCallback(async () => {
-    const options: ImageLibraryOptions = {
+    const options = {
       mediaType: 'photo',
       quality: 0.8,
       maxWidth: 800,
@@ -318,7 +317,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             }
           }
 
-          const newForm: FormData = {
+          const newForm = {
             first_name: u.first_name || '',
             last_name: u.last_name || '',
             username: u.username || '',
@@ -345,7 +344,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         } else {
           throw new Error('Failed to fetch profile');
         }
-      } catch (err: any) {
+      } catch (err) {
         if (err.response?.status === 401) {
           await AsyncStorage.multiRemove([
             'userToken',
@@ -356,7 +355,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           return;
         }
         showError({
-          title: 'Error',
+          title: t('profile.updateFailed'),
           message:
             err.response?.data?.message ||
             'Could not load your profile. Please try again.',
@@ -368,7 +367,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         }
       }
     },
-    [navigation, showError],
+    [navigation, showError, t],
   );
 
   // run on mount
@@ -384,19 +383,19 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     return unsub;
   }, [navigation, editing, fetchUserProfile]);
 
-  const onChange = useCallback((key: keyof FormData, value: string) => {
+  const onChange = useCallback((key, value) => {
     setForm(prev => ({ ...prev, [key]: value }));
   }, []);
 
   const onCancel = useCallback(() => {
     if (hasChanges) {
       Alert.alert(
-        'Discard Changes',
-        'Are you sure you want to discard your changes?',
+        t('profile.discardChanges'),
+        t('profile.discardChangesMessage'),
         [
-          { text: 'Keep Editing', style: 'cancel' },
+          { text: t('profile.keepEditing'), style: 'cancel' },
           {
-            text: 'Discard',
+            text: t('profile.discard'),
             style: 'destructive',
             onPress: () => {
               setForm(originalForm);
@@ -408,31 +407,31 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     } else {
       setEditing(false);
     }
-  }, [hasChanges, originalForm]);
+  }, [hasChanges, originalForm, t]);
 
   // simple validation
   const validateForm = useCallback(() => {
-    const errs: string[] = [];
-    if (!form.first_name.trim()) errs.push('First name is required');
-    if (!form.last_name.trim()) errs.push('Last name is required');
-    if (!form.username.trim()) errs.push('Username is required');
-    if (!form.email.trim()) errs.push('Email is required');
+    const errs = [];
+    if (!form.first_name.trim()) errs.push(t('profile.firstNameRequired'));
+    if (!form.last_name.trim()) errs.push(t('profile.lastNameRequired'));
+    if (!form.username.trim()) errs.push(t('profile.usernameRequired'));
+    if (!form.email.trim()) errs.push(t('profile.emailRequired'));
     const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (form.email && !emailRx.test(form.email.trim()))
-      errs.push('Please enter a valid email');
+      errs.push(t('profile.validEmailRequired'));
     if (
       form.phoneNumber &&
       form.phoneNumber.length > 0 &&
       form.phoneNumber.length < 6
     )
-      errs.push('Phone must be at least 6 digits');
+      errs.push(t('profile.phoneMinLength'));
     return { isValid: errs.length === 0, errors: errs };
-  }, [form]);
+  }, [form, t]);
 
   const onSave = useCallback(async () => {
     const { isValid, errors } = validateForm();
     if (!isValid) {
-      showError({ title: 'Validation', message: errors.join('\n') });
+      showError({ title: t('profile.validation'), message: errors.join('\n') });
       return;
     }
 
@@ -465,8 +464,8 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         // Validate file size (max 5MB)
         if (fileSize && fileSize > 5 * 1024 * 1024) {
           showError({
-            title: 'File Too Large',
-            message: 'Please select an image smaller than 5MB.',
+            title: t('profile.fileTooLarge'),
+            message: t('profile.imageSizeLimit'),
           });
           return;
         }
@@ -485,7 +484,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           type: mimeType,
         };
 
-        formData.append('profile_picture', fileObject as any);
+        formData.append('profile_picture', fileObject);
       }
 
       // Use the updateProfile method
@@ -497,7 +496,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
       // Update form state with saved data from server response
       const savedData = res.data.data || {};
-      const updatedForm: FormData = {
+      const updatedForm = {
         ...form,
         billing_phone: form.phoneNumber
           ? getCompletePhoneNumber(form.phoneCountryCode, form.phoneNumber)
@@ -524,35 +523,34 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
 
       showSuccess({
-        title: 'Profile Updated',
-        message: 'Your profile has been updated successfully.',
+        title: t('profile.profileUpdated'),
+        message: t('profile.profileUpdatedMessage'),
       });
 
       // Force a fresh fetch from server to ensure we have the latest data
       setTimeout(() => {
         fetchUserProfile(true);
       }, 500);
-    } catch (err: any) {
+    } catch (err) {
       let msg = 'Could not update profile.';
 
       if (err.response?.status === 409) {
-        msg = 'Username or email already in use.';
+        msg = t('profile.usernameEmailInUse');
       } else if (err.response?.status === 413) {
-        msg = 'Profile picture is too large. Please select a smaller image.';
+        msg = t('profile.imageTooLarge');
       } else if (err.response?.status === 415) {
-        msg = 'Unsupported image format. Please select a JPG or PNG image.';
+        msg = t('profile.unsupportedImageFormat');
       } else if (err.response?.status === 422) {
         msg =
           err.response?.data?.message ||
-          'Validation error. Please check your input.';
+          t('profile.validationError');
       } else if (err.response?.data?.message) {
         msg = err.response.data.message;
       } else if (err.message?.includes('No changes detected')) {
-        msg =
-          'No changes were detected. Please make sure to modify at least one field or select a profile picture.';
+        msg = t('profile.noChangesDetected');
       }
 
-      showError({ title: 'Update Failed', message: msg });
+      showError({ title: t('profile.updateFailed'), message: msg });
     } finally {
       if (mountedRef.current) setSaving(false);
     }
@@ -563,13 +561,14 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     showSuccess,
     getCompletePhoneNumber,
     fetchUserProfile,
+    t,
   ]);
 
   const handleLogout = useCallback(() => {
     showConfirm({
-      title: 'Sign Out',
-      message: 'Are you sure?',
-      confirmText: 'Sign Out',
+      title: t('profile.signOut'),
+      message: t('profile.signOutConfirm'),
+      confirmText: t('profile.signOut'),
       destructive: true,
       onConfirm: async () => {
         await AsyncStorage.multiRemove([
@@ -582,7 +581,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
       },
     });
-  }, [showConfirm, navigation]);
+  }, [showConfirm, navigation, t]);
 
   const onRefresh = useCallback(() => {
     if (!editing) fetchUserProfile(true);
@@ -590,19 +589,19 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
   const renderFormField = useCallback(
     (
-      label: string,
-      key: keyof FormData,
-      value: string,
-      editable: boolean,
-      keyboardType: 'default' | 'email-address' | 'numeric' = 'default',
+      label,
+      key,
+      value,
+      editable,
+      keyboardType = 'default',
       multiline = false,
-      maxLength?: number,
+      maxLength,
     ) => (
       <View style={styles.fieldContainer} key={key}>
         <Text style={styles.fieldLabel}>
           {label}
           {['first_name', 'last_name', 'username', 'email'].includes(key) && (
-            <Text style={styles.requiredIndicator}> *</Text>
+            <Text style={styles.requiredIndicator}> {t('profile.required')}</Text>
           )}
         </Text>
         {editable ? (
@@ -616,7 +615,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               value={value}
               onChangeText={txt => onChange(key, txt)}
               keyboardType={keyboardType}
-              placeholder={`Enter ${label.toLowerCase()}`}
+              placeholder={`${t(`profile.enter${key.charAt(0).toUpperCase() + key.slice(1).replace('_', '')}`)}`}
               placeholderTextColor="#9ca3af"
               multiline={multiline}
               numberOfLines={multiline ? 3 : 1}
@@ -636,20 +635,20 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         ) : (
           <View style={styles.fieldDisplay}>
             <Text style={[styles.fieldValue, !value && styles.emptyValue]}>
-              {value || 'Not provided'}
+              {value || t('profile.notProvided')}
             </Text>
           </View>
         )}
       </View>
     ),
-    [onChange, saving],
+    [onChange, saving, t],
   );
 
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color="#00c0a2" />
-        <Text style={styles.loadingText}>Loading your profile...</Text>
+        <Text style={styles.loadingText}>{t('profile.loadingProfile')}</Text>
       </View>
     );
   }
@@ -676,47 +675,56 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   <Icon name="arrow-left" size={scaleFont(20)} color="#fff" />
                 </TouchableOpacity>
                 <View style={styles.headerTextContainer}>
-                  <Text style={styles.headerTitle}>My Profile</Text>
+                  <Text style={styles.headerTitle}>{t('profile.myProfile')}</Text>
                   <Text style={styles.headerSubtitle}>
-                    {editing ? 'Edit your details' : 'Manage your account'}
+                    {editing ? t('profile.editDetails') : t('profile.manageAccount')}
                   </Text>
                 </View>
-                {editing ? (
-                  <View style={styles.editActions}>
+
+                <View style={styles.headerActions}>
+                  {/* Language Selector */}
+                  <LanguageSelector 
+                    size="small"
+                    buttonStyle={styles.profileLanguageButton}
+                  />
+
+                  {editing ? (
+                    <View style={styles.editActions}>
+                      <TouchableOpacity
+                        onPress={onCancel}
+                        disabled={saving}
+                        style={[styles.actionButton, styles.cancelButton]}
+                        activeOpacity={0.7}
+                      >
+                        <Icon name="x" size={scaleFont(18)} color="#fff" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={onSave}
+                        disabled={saving || !hasChanges}
+                        style={[
+                          styles.actionButton,
+                          styles.saveButton,
+                          (!hasChanges || saving) && styles.disabledButton,
+                        ]}
+                        activeOpacity={0.7}
+                      >
+                        {saving ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Icon name="check" size={scaleFont(18)} color="#fff" />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
                     <TouchableOpacity
-                      onPress={onCancel}
-                      disabled={saving}
-                      style={[styles.actionButton, styles.cancelButton]}
+                      onPress={() => setEditing(true)}
+                      style={[styles.actionButton, styles.editButton]}
                       activeOpacity={0.7}
                     >
-                      <Icon name="x" size={scaleFont(18)} color="#fff" />
+                      <Icon name="edit-3" size={scaleFont(18)} color="#fff" />
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={onSave}
-                      disabled={saving || !hasChanges}
-                      style={[
-                        styles.actionButton,
-                        styles.saveButton,
-                        (!hasChanges || saving) && styles.disabledButton,
-                      ]}
-                      activeOpacity={0.7}
-                    >
-                      {saving ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Icon name="check" size={scaleFont(18)} color="#fff" />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    onPress={() => setEditing(true)}
-                    style={[styles.actionButton, styles.editButton]}
-                    activeOpacity={0.7}
-                  >
-                    <Icon name="edit-3" size={scaleFont(18)} color="#fff" />
-                  </TouchableOpacity>
-                )}
+                  )}
+                </View>
               </View>
             </SafeAreaView>
           </View>
@@ -764,7 +772,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 {form.role && <Text style={styles.userRole}>{form.role}</Text>}
                 <View style={styles.statusBadge}>
                   <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>Active</Text>
+                  <Text style={styles.statusText}>{t('profile.active')}</Text>
                 </View>
               </View>
             </View>
@@ -774,14 +782,14 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           <View style={styles.formSection}>
             <View style={styles.sectionHeader}>
               <Icon name="user" size={scaleFont(18)} color="#00c0a2" />
-              <Text style={styles.sectionTitle}>Personal Information</Text>
+              <Text style={styles.sectionTitle}>{t('profile.personalInformation')}</Text>
             </View>
             <View style={styles.formGrid}>
               {isTablet ? (
                 // Tablet: Two columns
                 <View style={styles.tabletRow}>
                   {renderFormField(
-                    'First Name',
+                    t('profile.firstName'),
                     'first_name',
                     form.first_name,
                     editing,
@@ -790,7 +798,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                     50,
                   )}
                   {renderFormField(
-                    'Last Name',
+                    t('profile.lastName'),
                     'last_name',
                     form.last_name,
                     editing,
@@ -803,7 +811,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 // Mobile: Single column
                 <>
                   {renderFormField(
-                    'First Name',
+                    t('profile.firstName'),
                     'first_name',
                     form.first_name,
                     editing,
@@ -812,7 +820,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                     50,
                   )}
                   {renderFormField(
-                    'Last Name',
+                    t('profile.lastName'),
                     'last_name',
                     form.last_name,
                     editing,
@@ -823,7 +831,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 </>
               )}
               {renderFormField(
-                'Username',
+                t('profile.username'),
                 'username',
                 form.username,
                 editing,
@@ -832,7 +840,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 30,
               )}
               {renderFormField(
-                'Email Address',
+                t('profile.emailAddress'),
                 'email',
                 form.email,
                 editing,
@@ -847,7 +855,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           <View style={styles.formSection}>
             <View style={styles.sectionHeader}>
               <Icon name="phone" size={scaleFont(18)} color="#00c0a2" />
-              <Text style={styles.sectionTitle}>Contact Information</Text>
+              <Text style={styles.sectionTitle}>{t('profile.contactInformation')}</Text>
             </View>
             <View style={styles.formGrid}>
               <PhoneInput
@@ -855,15 +863,15 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 phoneNumber={form.phoneNumber}
                 onCountryCodeChange={code => onChange('phoneCountryCode', code)}
                 onPhoneNumberChange={num => onChange('phoneNumber', num)}
-                label="Phone Number"
-                placeholder="Enter phone number"
+                label={t('profile.phoneNumber')}
+                placeholder={t('profile.enterPhoneNumber')}
                 disabled={!editing || saving}
                 showCountryName={false}
                 maxLength={15}
                 showLabel={true}
               />
               {renderFormField(
-                'Country',
+                t('profile.country'),
                 'billing_country',
                 form.billing_country,
                 editing,
@@ -878,11 +886,11 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           <View style={styles.formSection}>
             <View style={styles.sectionHeader}>
               <Icon name="briefcase" size={scaleFont(18)} color="#00c0a2" />
-              <Text style={styles.sectionTitle}>Business Information</Text>
+              <Text style={styles.sectionTitle}>{t('profile.businessInformation')}</Text>
             </View>
             <View style={styles.formGrid}>
               {renderFormField(
-                'Company',
+                t('profile.company'),
                 'company',
                 form.company,
                 editing,
@@ -893,7 +901,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               {isTablet ? (
                 <View style={styles.tabletRow}>
                   {renderFormField(
-                    'Role',
+                    t('profile.role'),
                     'role',
                     form.role,
                     editing,
@@ -902,7 +910,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                     50,
                   )}
                   {renderFormField(
-                    'Business Type',
+                    t('profile.businessType'),
                     'business_type',
                     form.business_type,
                     editing,
@@ -914,7 +922,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               ) : (
                 <>
                   {renderFormField(
-                    'Role',
+                    t('profile.role'),
                     'role',
                     form.role,
                     editing,
@@ -923,7 +931,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                     50,
                   )}
                   {renderFormField(
-                    'Business Type',
+                    t('profile.businessType'),
                     'business_type',
                     form.business_type,
                     editing,
@@ -941,7 +949,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             <View style={styles.sectionHeader}>
               <Icon name="settings" size={scaleFont(18)} color="#ef4444" />
               <Text style={[styles.sectionTitle, { color: '#ef4444' }]}>
-                Account Settings
+                {t('profile.accountSettings')}
               </Text>
             </View>
             <TouchableOpacity
@@ -952,7 +960,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               <View style={styles.logoutIconContainer}>
                 <Icon name="log-out" size={scaleFont(18)} color="#ef4444" />
               </View>
-              <Text style={styles.logoutText}>Sign Out</Text>
+              <Text style={styles.logoutText}>{t('profile.signOut')}</Text>
               <Icon name="chevron-right" size={scaleFont(16)} color="#ef4444" />
             </TouchableOpacity>
           </View>
@@ -961,7 +969,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             <View style={styles.savePrompt}>
               <Icon name="info" size={scaleFont(16)} color="#f59e0b" />
               <Text style={styles.savePromptText}>
-                You have unsaved changes
+                {t('profile.unsavedChanges')}
               </Text>
             </View>
           )}
@@ -1041,6 +1049,15 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     marginTop: spacing.xs,
     fontWeight: '500',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  profileLanguageButton: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   editActions: {
     flexDirection: 'row',

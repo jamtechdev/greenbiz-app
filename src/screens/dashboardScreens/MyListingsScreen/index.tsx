@@ -15,25 +15,46 @@ import {
   Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { useTranslation } from 'react-i18next';
+import { useSelector, useDispatch } from 'react-redux';
 import BottomNav from '../../../components/BottomNavbar';
 import { useAppContext } from '../../../_customContext/AppProvider';
 
 import { apiService } from '../../../api/axiosConfig';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
-import { useSelector } from 'react-redux';
 import CustomAlert from '../../../components/CustomAlert';
+
+// Redux language imports
+import { 
+  changeLanguage,
+  selectCurrentLanguage,
+  selectIsLanguageInitialized,
+  selectLanguageLoading,
+  selectAvailableLanguages 
+} from '../../../store/slices/languageSlice';
 
 const { width, height } = Dimensions.get('window');
 
 export default function MyListingsScreen({ navigation }) {
+  const { t } = useTranslation();
+  const dispatch = useDispatch();
   const { showOverlay, setShowOverlay } = useAppContext();
-  const {alertConfig, showConfirm, showError, showSuccess,hideAlert } = useCustomAlert();
+  const { alertConfig, showConfirm, showError, showSuccess, hideAlert } = useCustomAlert();
 
+  // Redux language selectors
+  const currentLanguage = useSelector(selectCurrentLanguage);
+  const isLanguageInitialized = useSelector(selectIsLanguageInitialized);
+  const isLanguageLoading = useSelector(selectLanguageLoading);
+  const availableLanguages = useSelector(selectAvailableLanguages);
+
+  // Local state
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [stats, setStats] = useState({
     published: 0,
     pending: 0,
@@ -44,9 +65,42 @@ export default function MyListingsScreen({ navigation }) {
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(50))[0];
   const scaleAnim = useState(new Animated.Value(0.9))[0];
+  
   const { user, isAuthenticated, token } = useSelector(
     state => state.auth || {},
   );
+
+  // Language handling functions
+  const handleLanguageChange = async (languageCode) => {
+    try {
+      await dispatch(changeLanguage(languageCode)).unwrap();
+      setShowLanguageModal(false);
+      console.log('✅ Language changed to:', languageCode);
+    } catch (error) {
+      console.error('❌ Error changing language:', error);
+      showError({
+        title: 'Language Change Failed',
+        message: 'Unable to change language. Please try again.',
+      });
+    }
+  };
+
+  const getLanguageShortName = (langCode) => {
+    const language = availableLanguages.find(lang => lang.code === langCode);
+    return language?.shortName || 'EN';
+  };
+
+  // Show loading if language is not initialized yet
+  if (!isLanguageInitialized || isLanguageLoading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Initializing...</Text>
+        </View>
+      </View>
+    );
+  }
 
   // Fetch listings on component mount
   useEffect(() => {
@@ -101,9 +155,7 @@ export default function MyListingsScreen({ navigation }) {
       }
     } catch (error) {
       console.error('❌ Error fetching listings:', error);
-      // Error is handled by axios interceptor, but we can show a specific message
       if (error.response?.status !== 401) {
-        // Don't show error for auth issues
         showError({
           title: 'Failed to Load Listings',
           message: 'Unable to fetch your listings. Please try again.',
@@ -125,8 +177,7 @@ export default function MyListingsScreen({ navigation }) {
       item => item.status === 'pending' || item.status === 'draft',
     ).length;
 
-    // Since your API doesn't return views, we'll set totalViews to 0 or use a placeholder
-    const totalViews = 0; // You can update this when view data is available
+    const totalViews = 0;
 
     setStats({ published, pending, totalViews });
   };
@@ -138,16 +189,72 @@ export default function MyListingsScreen({ navigation }) {
 
   const handleViewDetails = listing => {
     setActiveMenuId(null);
-    // Navigate to listing details screen
     navigation.navigate('ProductDetailsById', { productId: listing.ID });
   };
 
   const handleEditListing = listing => {
     setActiveMenuId(null);
-    // Navigate to edit screen
     navigation.navigate('editProductscreen', {
       listingId: listing.ID,
       listing: listing,
+    });
+  };
+
+  const handlePublishListing = listing => {
+    setActiveMenuId(null);
+    
+    console.log('📤 Attempting to publish listing:', listing.ID, listing.title);
+    
+    showConfirm({
+      title: t('submitForReview'),
+      message: `${t('submitForReview')} "${listing.title}" ${t('sendToAdmin')}`,
+      confirmText: t('submitForReview'),
+      onConfirm: async () => {
+        try {
+          setPublishing(true);
+          console.log('📤 Publishing listing with ID:', listing.ID);
+          
+          const response = await apiService.updateListingStatus(listing.ID, 'pending');
+          
+          console.log('✅ Publish response:', response);
+          
+          if (response.data && response.data.success) {
+            showSuccess({
+              title: t('submitForReview'),
+              message: t('sendToAdmin'),
+              onPress: () => {
+                fetchListings();
+              },
+            });
+            
+            fetchListings();
+          } else {
+            throw new Error(response.data?.message || 'Publish failed');
+          }
+          
+        } catch (error) {
+          console.error('❌ Error publishing listing:', error);
+          
+          let errorMessage = 'Unable to submit the listing for review. Please try again.';
+          
+          if (error.response) {
+            errorMessage = error.response.data?.message || errorMessage;
+            console.error('Server error:', error.response.status, error.response.data);
+          } else if (error.request) {
+            errorMessage = 'Network error. Please check your connection and try again.';
+            console.error('Network error:', error.request);
+          } else {
+            console.error('Error:', error.message);
+          }
+          
+          showError({
+            title: 'Submission Failed',
+            message: errorMessage,
+          });
+        } finally {
+          setPublishing(false);
+        }
+      },
     });
   };
 
@@ -157,32 +264,28 @@ export default function MyListingsScreen({ navigation }) {
     console.log('🗑️ Attempting to delete listing:', listing.ID, listing.title);
     
     showConfirm({
-      title: 'Delete Listing',
-      message: `Are you sure you want to delete "${listing.title}"? This action cannot be undone.`,
-      confirmText: 'Delete',
+      title: t('deleteListing'),
+      message: `${t('deleteListing')} "${listing.title}"? ${t('permanentlyRemove')}`,
+      confirmText: t('deleteListing'),
       destructive: true,
       onConfirm: async () => {
         try {
           setDeleting(true);
           console.log('🔥 Deleting listing with ID:', listing.ID);
           
-          // Call the delete API
           const response = await apiService.deleteListing(listing.ID);
           
           console.log('✅ Delete response:', response);
           
-          // Check if the deletion was successful
           if (response.data && response.data.success) {
             showSuccess({
-              title: 'Listing Deleted',
-              message: 'Your listing has been successfully deleted.',
+              title: t('deleteListing'),
+              message: t('permanentlyRemove'),
               onPress: () => {
-                // Refresh the listings after successful deletion
                 fetchListings();
               },
             });
             
-            // Also refresh immediately without waiting for user to close alert
             fetchListings();
           } else {
             throw new Error(response.data?.message || 'Delete failed');
@@ -191,19 +294,15 @@ export default function MyListingsScreen({ navigation }) {
         } catch (error) {
           console.error('❌ Error deleting listing:', error);
           
-          // More detailed error handling
           let errorMessage = 'Unable to delete the listing. Please try again.';
           
           if (error.response) {
-            // Server responded with error status
             errorMessage = error.response.data?.message || errorMessage;
             console.error('Server error:', error.response.status, error.response.data);
           } else if (error.request) {
-            // Network error
             errorMessage = 'Network error. Please check your connection and try again.';
             console.error('Network error:', error.request);
           } else {
-            // Other error
             console.error('Error:', error.message);
           }
           
@@ -222,6 +321,13 @@ export default function MyListingsScreen({ navigation }) {
     if (!dateString) return 'Unknown';
     try {
       const date = new Date(dateString);
+      if (currentLanguage === 'zh-TW') {
+        return date.toLocaleDateString('zh-TW', {
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+        });
+      }
       return date.toLocaleDateString('en-US', {
         month: 'numeric',
         day: 'numeric',
@@ -238,8 +344,9 @@ export default function MyListingsScreen({ navigation }) {
       case 'publish':
         return { bg: '#10b98120', text: '#10b981' };
       case 'pending':
-      case 'draft':
         return { bg: '#f59e0b20', text: '#f59e0b' };
+      case 'draft':
+        return { bg: '#6b728020', text: '#6b7280' };
       default:
         return { bg: '#6b728020', text: '#6b7280' };
     }
@@ -266,7 +373,7 @@ export default function MyListingsScreen({ navigation }) {
       <View style={[styles.container, styles.centered]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingText}>Loading your listings...</Text>
+          <Text style={styles.loadingText}>{t('loadingListings')}</Text>
         </View>
       </View>
     );
@@ -292,7 +399,7 @@ export default function MyListingsScreen({ navigation }) {
           />
         }
       >
-        {/* Simplified Clean Header */}
+        {/* Header with Language Toggle */}
         <View style={styles.header}>
           <Animated.View
             style={[
@@ -305,27 +412,36 @@ export default function MyListingsScreen({ navigation }) {
           >
             <View style={styles.headerTop}>
               <View style={styles.headerLeft}>
-                <Text style={styles.headerTitle}>My Listings</Text>
+                <Text style={styles.headerTitle}>{t('myListings')}</Text>
                 <View style={styles.headerBadge}>
                   <Icon name="package" size={14} color="#6b7280" />
                   <Text style={styles.headerSubtitle}>
-                    {listings.length} machine{listings.length !== 1 ? 's' : ''}{' '}
-                    listed
+                    {t('machinesListed', { count: listings.length })}
                   </Text>
                 </View>
               </View>
 
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => setShowOverlay(true)}
-                activeOpacity={0.8}
-              >
-                <Icon name="plus" size={18} color="#ffffff" />
-                <Text style={styles.addButtonText}>Add New</Text>
-              </TouchableOpacity>
+              <View style={styles.headerRight}>
+                {/* Language Toggle Button */}
+                <TouchableOpacity
+                  style={styles.languageButton}
+                  onPress={() => setShowLanguageModal(true)}
+                  activeOpacity={0.8}
+                  disabled={isLanguageLoading}
+                >
+                  <Icon name="globe" size={16} color="#0d9488" />
+                  {isLanguageLoading ? (
+                    <ActivityIndicator size={14} color="#0d9488" />
+                  ) : (
+                    <Text style={styles.languageButtonText}>
+                      {getLanguageShortName(currentLanguage)}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Clean Stats Cards */}
+            {/* Stats Container */}
             <Animated.View
               style={[
                 styles.statsContainer,
@@ -347,7 +463,7 @@ export default function MyListingsScreen({ navigation }) {
                   </View>
                   <Text style={styles.statValue}>{stats.published}</Text>
                   <Text style={[styles.statLabel, { color: '#0d9488' }]}>
-                    Published
+                    {t('published')}
                   </Text>
                 </View>
 
@@ -362,7 +478,7 @@ export default function MyListingsScreen({ navigation }) {
                   </View>
                   <Text style={styles.statValue}>{stats.pending}</Text>
                   <Text style={[styles.statLabel, { color: '#4f46e5' }]}>
-                    Pending
+                    {t('pending')}
                   </Text>
                 </View>
 
@@ -377,7 +493,7 @@ export default function MyListingsScreen({ navigation }) {
                   </View>
                   <Text style={styles.statValue}>{stats.totalViews}</Text>
                   <Text style={[styles.statLabel, { color: '#059669' }]}>
-                    Total Views
+                    {t('totalViews')}
                   </Text>
                 </View>
               </View>
@@ -385,7 +501,7 @@ export default function MyListingsScreen({ navigation }) {
           </Animated.View>
         </View>
 
-        {/* Enhanced Listings Section */}
+        {/* Listings Section */}
         <View style={styles.listingContainer}>
           {listings.length === 0 ? (
             <Animated.View
@@ -400,10 +516,9 @@ export default function MyListingsScreen({ navigation }) {
               <View style={styles.emptyIconContainer}>
                 <Icon name="package" size={32} color="#6b7280" />
               </View>
-              <Text style={styles.emptyTitle}>No Listings Yet</Text>
+              <Text style={styles.emptyTitle}>{t('noListingsYet')}</Text>
               <Text style={styles.emptyDescription}>
-                Start by adding your first equipment listing and watch your
-                business grow
+                {t('noListingsDescription')}
               </Text>
               <TouchableOpacity
                 style={styles.emptyButton}
@@ -412,7 +527,7 @@ export default function MyListingsScreen({ navigation }) {
               >
                 <Icon name="plus" size={18} color="#ffffff" />
                 <Text style={styles.emptyButtonText}>
-                  Add Your First Listing
+                  {t('addFirstListing')}
                 </Text>
               </TouchableOpacity>
             </Animated.View>
@@ -446,7 +561,6 @@ export default function MyListingsScreen({ navigation }) {
                     activeOpacity={0.95}
                   >
                     <View style={styles.cardContent}>
-                      {/* Enhanced Image Container */}
                       <View style={styles.imageContainer}>
                         <Image
                           source={{
@@ -455,6 +569,7 @@ export default function MyListingsScreen({ navigation }) {
                               'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400',
                           }}
                           style={styles.cardImage}
+                          resizeMode='contain'
                         />
                         <View style={styles.imageOverlay}>
                           <View style={styles.viewsBadge}>
@@ -489,7 +604,9 @@ export default function MyListingsScreen({ navigation }) {
                                     { color: statusColor.text },
                                   ]}
                                 >
-                                  {item.status || 'draft'}
+                                  {item.status === 'published' ? t('published') : 
+                                   item.status === 'pending' ? t('pending') : 
+                                   item.status || 'draft'}
                                 </Text>
                               </View>
                               {productType && (
@@ -527,7 +644,7 @@ export default function MyListingsScreen({ navigation }) {
                           <View style={styles.metaRow}>
                             <Icon name="calendar" size={12} color="#94a3b8" />
                             <Text style={styles.metaText}>
-                              Listed {formatDate(item.created_at)}
+                              {t('listedOn', { date: formatDate(item.created_at) })}
                             </Text>
                           </View>
                           <View style={styles.tagRow}>
@@ -537,7 +654,7 @@ export default function MyListingsScreen({ navigation }) {
                                   {item.currency || 'USD'} {""}
                                   {item.price
                                     ? `${item.price}`
-                                    : 'Price on request'}
+                                    : t('priceOnRequest')}
                                 </Text>
                               </View>
                             )}
@@ -559,20 +676,66 @@ export default function MyListingsScreen({ navigation }) {
           )}
         </View>
       </ScrollView>
-        <CustomAlert
-            visible={alertConfig.visible}
-            title={alertConfig.title}
-            message={alertConfig.message}
-            buttons={alertConfig.buttons}
-            showCancel={alertConfig.showCancel}
-            cancelText={alertConfig.cancelText}
-            vibrate={alertConfig.vibrate}
-            onDismiss={hideAlert}
-          />
+        
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        showCancel={alertConfig.showCancel}
+        cancelText={alertConfig.cancelText}
+        vibrate={alertConfig.vibrate}
+        onDismiss={hideAlert}
+      />
 
       <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />
 
-      {/* Enhanced Action Menu Modal */}
+      {/* Language Selection Modal */}
+      <Modal
+        isVisible={showLanguageModal}
+        onBackdropPress={() => setShowLanguageModal(false)}
+        backdropOpacity={0.3}
+        animationIn="slideInUp"
+        animationOut="slideOutDown"
+        style={styles.modalStyle}
+      >
+        <View style={styles.languageModal}>
+          <View style={styles.menuHandle} />
+          <Text style={styles.languageModalTitle}>{t('language')}</Text>
+          
+          {availableLanguages.map((language) => (
+            <TouchableOpacity
+              key={language.code}
+              style={[
+                styles.languageOption,
+                currentLanguage === language.code && styles.languageOptionActive
+              ]}
+              onPress={() => handleLanguageChange(language.code)}
+              activeOpacity={0.7}
+              disabled={isLanguageLoading}
+            >
+              <View style={styles.languageOptionContent}>
+                <Text style={[
+                  styles.languageOptionText,
+                  currentLanguage === language.code && styles.languageOptionTextActive
+                ]}>
+                  {language.name}
+                </Text>
+                <Text style={styles.languageOptionSubtext}>
+                  {language.nativeName}
+                </Text>
+              </View>
+              {isLanguageLoading && currentLanguage === language.code ? (
+                <ActivityIndicator size={20} color="#0d9488" />
+              ) : currentLanguage === language.code ? (
+                <Icon name="check" size={20} color="#0d9488" />
+              ) : null}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Modal>
+
+      {/* Action Menu Modal */}
       <Modal
         isVisible={activeMenuId !== null}
         onBackdropPress={() => setActiveMenuId(null)}
@@ -595,9 +758,9 @@ export default function MyListingsScreen({ navigation }) {
               <Icon name="eye" size={18} color="#3b82f6" />
             </View>
             <View style={styles.menuTextContainer}>
-              <Text style={styles.menuText}>View Details</Text>
+              <Text style={styles.menuText}>{t('viewDetails')}</Text>
               <Text style={styles.menuSubtext}>
-                See full listing information
+                {t('seeFullInfo')}
               </Text>
             </View>
             <Icon name="chevron-right" size={16} color="#94a3b8" />
@@ -614,13 +777,42 @@ export default function MyListingsScreen({ navigation }) {
               <Icon name="edit" size={18} color="#f59e0b" />
             </View>
             <View style={styles.menuTextContainer}>
-              <Text style={styles.menuText}>Edit Listing</Text>
+              <Text style={styles.menuText}>{t('editListing')}</Text>
               <Text style={styles.menuSubtext}>
-                Modify your listing details
+                {t('modifyDetails')}
               </Text>
             </View>
             <Icon name="chevron-right" size={16} color="#94a3b8" />
           </TouchableOpacity>
+
+          {/* Publish Button - Only show for draft items */}
+          {currentListing && currentListing.status === 'draft' && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handlePublishListing(currentListing)}
+              activeOpacity={0.7}
+              disabled={publishing}
+            >
+              <View
+                style={[styles.menuIconContainer, { backgroundColor: '#dcfce7' }]}
+              >
+                {publishing ? (
+                  <ActivityIndicator size={18} color="#16a34a" />
+                ) : (
+                  <Icon name="send" size={18} color="#16a34a" />
+                )}
+              </View>
+              <View style={styles.menuTextContainer}>
+                <Text style={[styles.menuText, { color: '#16a34a' }]}>
+                  {publishing ? t('submitting') : t('submitForReview')}
+                </Text>
+                <Text style={styles.menuSubtext}>
+                  {t('sendToAdmin')}
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={16} color="#16a34a" />
+            </TouchableOpacity>
+          )}
 
           <View style={styles.menuDivider} />
 
@@ -644,10 +836,10 @@ export default function MyListingsScreen({ navigation }) {
             
             <View style={styles.menuTextContainer}>
               <Text style={[styles.menuText, { color: '#dc2626' }]}>
-                {deleting ? 'Deleting...' : 'Delete Listing'}
+                {deleting ? t('deleting') : t('deleteListing')}
               </Text>
               <Text style={styles.menuSubtext}>
-                Permanently remove this listing
+                {t('permanentlyRemove')}
               </Text>
             </View>
             <Icon name="chevron-right" size={16} color="#dc2626" />
@@ -668,7 +860,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Clean Loading Styles
+  // Loading Styles
   loadingContainer: {
     alignItems: 'center',
     padding: 40,
@@ -681,7 +873,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Enhanced Header Styles with Organic Colors
+  // Header Styles
   header: {
     backgroundColor: '#c0faf5',
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
@@ -702,6 +894,11 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerTitle: {
     fontSize: 32,
@@ -728,29 +925,51 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Enhanced Add Button with Extracted Colors
+  // Language Toggle Button
+  languageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    gap: 6,
+    borderWidth: 2,
+    borderColor: '#0d9488',
+    shadowColor: '#0d9488',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  languageButtonText: {
+    color: '#0d9488',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+
+  // Add Button
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0d9488',
-    marginVertical: 20,
     paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 20,
-    gap: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    gap: 6,
     shadowColor: '#0d9488',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowRadius: 8,
+    elevation: 6,
   },
   addButtonText: {
     color: '#ffffff',
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 14,
   },
 
-  // Enhanced Stats Container with Extracted Colors
+  // Stats Container
   statsContainer: {
     marginTop: 8,
   },
@@ -800,7 +1019,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
-  // Clean Empty State
+  // Empty State
   emptyState: {
     backgroundColor: '#ffffff',
     alignItems: 'center',
@@ -855,7 +1074,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  // Clean Card Styles
+  // Card Styles
   cardWrapper: {
     marginBottom: 20,
   },
@@ -896,6 +1115,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingHorizontal: 8,
     paddingBottom: 6,
+    // resizeMode: 'contain',
   },
   viewsBadge: {
     flexDirection: 'row',
@@ -954,7 +1174,7 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
 
-  // Clean Menu Button
+  // Menu Button
   menuBtn: {
     padding: 10,
     borderRadius: 12,
@@ -979,11 +1199,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
- tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
   tag: {
     backgroundColor: '#f1f5f9',
     borderRadius: 8,
@@ -998,11 +1213,68 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Clean Modal Styles
+  // Modal Styles
   modalStyle: {
     justifyContent: 'flex-end',
     margin: 0,
   },
+
+  // Language Modal
+  languageModal: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  languageModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  languageOptionActive: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#0d9488',
+  },
+  languageOptionContent: {
+    flex: 1,
+  },
+  languageOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  languageOptionTextActive: {
+    color: '#0d9488',
+  },
+  languageOptionSubtext: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+
+  // Action Menu Modal
   popoverMenu: {
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 20,

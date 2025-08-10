@@ -499,6 +499,33 @@ export const apiService = {
 
   // Auction methods
   getAuctionGroups: () => apiService.get('/auction-groups'),
+  updateListingStatus: async (productId, status) => {
+  try {
+    console.log(`📤 Updating listing status: ID ${productId} to "${status}"`);
+    
+    const token = await AsyncStorage.getItem('userToken');
+    
+    const response = await apiClient.post(
+      `/product/status-update?product_id=${productId}&status=${status}`,
+      {}, // Empty body since parameters are in query string
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+          'Cookie': 'wp-wpml_current_admin_language_d41d8cd98f00b204e9800998ecf8427e=en'
+        },
+        timeout: 30000,
+      },
+    );
+
+    console.log('✅ Status update response:', response.data);
+    return response;
+  } catch (error) {
+    console.error('❌ Error updating listing status:', error);
+    throw error;
+  }
+},
 };
 
 export default apiClient;

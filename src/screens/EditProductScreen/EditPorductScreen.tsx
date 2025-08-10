@@ -13,10 +13,12 @@ import {
   Animated,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 import { useAppContext } from '../../_customContext/AppProvider';
 import { useCustomAlert } from '../../hook/useCustomAlert';
 import { apiService } from '../../api/axiosConfig';
@@ -56,34 +58,10 @@ const FONTS = {
   light: 'Poppins-Light',
 };
 
-// Dropdown options
-const CONDITIONS = [
-  'New/Unused',
-  'Like New', 
-  'Used',
-  'Used, Needs Minor Repair',
-];
-
-const OPERATION_STATUS = ['Running', 'Idle', 'Down', 'Fully functional'];
-
-const CURRENCIES = [
-  'USD ($)',
-  'CNY (¥)',
-  'TWD (NT$)',
-  'THB (฿)',
-  'VND (₫)',
-  'HKD (HK$)',
-  'EUR (€)',
-  'CAD (C$)',
-  'GBP (£)',
-  'AUD (A$)',
-  'PKR (Rs)',
-  'AED (د.إ)',
-];
-
 export default function EditProductScreen({ route, navigation }) {
   const { listingId, listing } = route.params || {};
   const { setShowOverlay } = useAppContext();
+  const { t } = useTranslation();
 
   const {
     alertConfig,
@@ -94,6 +72,36 @@ export default function EditProductScreen({ route, navigation }) {
     showConfirm,
   } = useCustomAlert();
 
+  // Get dropdown options based on current language
+  const getConditionOptions = () => [
+    t('editProduct.conditions.newUnused'),
+    t('editProduct.conditions.likeNew'),
+    t('editProduct.conditions.used'),
+    t('editProduct.conditions.usedNeedsRepair'),
+  ];
+
+  const getOperationStatusOptions = () => [
+    t('editProduct.operationStatus.running'),
+    t('editProduct.operationStatus.idle'),
+    t('editProduct.operationStatus.down'),
+    t('editProduct.operationStatus.fullyFunctional'),
+  ];
+
+  const CURRENCIES = [
+    'USD ($)',
+    'CNY (¥)',
+    'TWD (NT$)',
+    'THB (฿)',
+    'VND (₫)',
+    'HKD (HK$)',
+    'EUR (€)',
+    'CAD (C$)',
+    'GBP (£)',
+    'AUD (A$)',
+    'PKR (Rs)',
+    'AED (د.إ)',
+  ];
+
   // State management
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -101,6 +109,8 @@ export default function EditProductScreen({ route, navigation }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [mediaFiles, setMediaFiles] = useState([]);
+  const [existingDocuments, setExistingDocuments] = useState([]);
+  const [documentsToDelete, setDocumentsToDelete] = useState([]);
 
   // Form fields state
   const [fields, setFields] = useState({});
@@ -145,6 +155,46 @@ export default function EditProductScreen({ route, navigation }) {
   const initializeFields = (data) => {
     if (!data) return {};
 
+    // Extract existing documents from various possible sources
+    let documents = [];
+    
+    // Handle pdf_documents array
+    if (data.pdf_documents && Array.isArray(data.pdf_documents)) {
+      documents = data.pdf_documents.map((url, index) => {
+        // Extract filename from URL
+        const urlParts = url.split('/');
+        const filename = urlParts[urlParts.length - 1] || `Document_${index + 1}.pdf`;
+        
+        return {
+          id: `pdf_${index}`,
+          name: filename.replace(/\.[^/.]+$/, ""), // Remove extension for display
+          filename: filename,
+          url: url,
+          type: 'pdf',
+          size: null, // Size not provided in API
+          category: 'documents'
+        };
+      });
+    }
+    
+    // Also check other possible document sources
+    const otherDocs = data.documents || data.attachments || data.files || [];
+    if (otherDocs.length > 0) {
+      const formattedOtherDocs = otherDocs.map((doc, index) => ({
+        id: doc.id || `doc_${index}`,
+        name: doc.name || doc.filename || `Document ${index + 1}`,
+        filename: doc.filename || doc.name,
+        url: doc.url || doc.src,
+        type: doc.type || 'unknown',
+        size: doc.size || null,
+        category: 'documents'
+      }));
+      documents = [...documents, ...formattedOtherDocs];
+    }
+
+    console.log('📎 Extracted documents:', documents);
+    setExistingDocuments(documents);
+
     return {
       name: { value: data.title || '', editing: false },
       brand: { value: data.brand || '', editing: false },
@@ -158,9 +208,9 @@ export default function EditProductScreen({ route, navigation }) {
         value: data.category || '',
         editing: false,
       },
-      condition: { value: data.item_condition || 'Used', editing: false },
+      condition: { value: data.item_condition || t('editProduct.conditions.used'), editing: false },
       operation_status: {
-        value: data.operation_status || 'Running',
+        value: data.operation_status || t('editProduct.operationStatus.running'),
         editing: false,
       },
       currency: { 
@@ -176,10 +226,9 @@ export default function EditProductScreen({ route, navigation }) {
       sub_category: { value: data.subcategory || data.sub_category || '', editing: false },
       dimensions: { value: data.dimensions || '', editing: false },
       co2_emission: { value: data.co2_emission || '', editing: false },
-      // Auction fields - FIXED to use proper field names
+      // Auction fields
       auction_start_time: { value: data.auction_start_time || '', editing: false },
       auction_end_time: { value: data.auction_end_time || '', editing: false },
-     
       auction_start_price: { 
         value: (data.auction_start_price || '0').toString(), 
         editing: false 
@@ -200,6 +249,12 @@ export default function EditProductScreen({ route, navigation }) {
       reserve_price: { 
         value: data.reserve_price ? data.reserve_price.toString() : '', 
         editing: false 
+      },
+      // Documents field for display
+      documents: { 
+        value: documents.length > 0 ? t('editProduct.documents.currentDocuments', { count: documents.length }) : t('editProduct.documents.noExistingDocuments'), 
+        editing: false,
+        readOnly: true 
       },
     };
   };
@@ -242,8 +297,8 @@ export default function EditProductScreen({ route, navigation }) {
     } catch (error) {
       console.error('❌ Error fetching product:', error);
       showError({
-        title: 'Error',
-        message: 'Failed to load product data. Please try again.',
+        title: t('editProduct.messages.loadError'),
+        message: t('editProduct.messages.loadErrorMessage'),
       });
     } finally {
       setIsLoading(false);
@@ -300,8 +355,8 @@ export default function EditProductScreen({ route, navigation }) {
     } else {
       console.error('❌ No listingId provided');
       showError({
-        title: 'Error',
-        message: 'No product ID provided',
+        title: t('editProduct.messages.loadError'),
+        message: t('editProduct.messages.noProductId'),
       });
     }
   }, [listingId]);
@@ -471,46 +526,44 @@ export default function EditProductScreen({ route, navigation }) {
   };
 
   // Validation
-  // Validation
-const validateFields = () => {
-  const errors = {};
+  const validateFields = () => {
+    const errors = {};
 
-  if (!fields.name?.value?.trim()) {
-    errors.name = 'Product title is required';
-  }
-
-  if (!fields.equipment_description?.value?.trim()) {
-    errors.equipment_description = 'Product description is required';
-  }
-
-  // Auction-specific validation
-  if (fields.product_type?.value === 'auction') {
-    if (!fields.auction_start_time?.value) {
-      errors.auction_start_time = 'Start date is required for auctions';
+    if (!fields.name?.value?.trim()) {
+      errors.name = t('editProduct.validation.productTitleRequired');
     }
 
-    if (!fields.auction_end_time?.value) {
-      errors.auction_end_time = 'End date is required for auctions';
+    if (!fields.equipment_description?.value?.trim()) {
+      errors.equipment_description = t('editProduct.validation.descriptionRequired');
     }
 
-    if (fields.auction_start_time?.value && fields.auction_end_time?.value) {
-      const startDate = new Date(fields.auction_start_time.value);
-      const endDate = new Date(fields.auction_end_time.value);
-      if (endDate <= startDate) {
-        errors.auction_end_time = 'End date must be after start date';
+    // Auction-specific validation
+    if (fields.product_type?.value === 'auction') {
+      if (!fields.auction_start_time?.value) {
+        errors.auction_start_time = t('editProduct.validation.startDateRequired');
+      }
+
+      if (!fields.auction_end_time?.value) {
+        errors.auction_end_time = t('editProduct.validation.endDateRequired');
+      }
+
+      if (fields.auction_start_time?.value && fields.auction_end_time?.value) {
+        const startDate = new Date(fields.auction_start_time.value);
+        const endDate = new Date(fields.auction_end_time.value);
+        if (endDate <= startDate) {
+          errors.auction_end_time = t('editProduct.validation.endDateAfterStart');
+        }
+      }
+
+      if (!fields.auction_start_price?.value || parseFloat(fields.auction_start_price.value) <= 0) {
+        errors.auction_start_price = t('editProduct.validation.validStartingPriceRequired');
       }
     }
 
-    if (!fields.auction_start_price?.value || parseFloat(fields.auction_start_price.value) <= 0) {
-      errors.auction_start_price = 'Valid starting bid price is required';
-    }
-  }
+    return errors;
+  };
 
-  return errors;
-};
-
-
-  // Update product function with better field mapping
+  // Enhanced handleUpdateProduct function with better document handling
   const handleUpdateProduct = async () => {
     try {
       // Validate fields
@@ -519,8 +572,8 @@ const validateFields = () => {
 
       if (Object.keys(errors).length > 0) {
         showError({
-          title: 'Validation Error',
-          message: 'Please fix the validation errors before updating.',
+          title: t('editProduct.validation.validationError'),
+          message: t('editProduct.validation.fixValidationErrors'),
         });
         return;
       }
@@ -563,13 +616,10 @@ const validateFields = () => {
       // Add subcategory properly
       if (fields.sub_category?.value) {
         updateData.append('subcategory', fields.sub_category.value);
-        // updateData.append('sub_category', fields.sub_category.value);
       }
 
       // Add auction-specific fields if product type is auction
       if (fields.product_type?.value === 'auction') {
-        // updateData.append('_yith_auction_for', fields.auction_start_time?.value || '');
-        // updateData.append('_yith_auction_to', fields.auction_end_time?.value || '');
         updateData.append('_yith_auction_for', fields.auction_start_time?.value || '');
         updateData.append('_yith_auction_to', fields.auction_end_time?.value || '');
         updateData.append('_yith_auction_start_price', fields.auction_start_price?.value || '0');
@@ -603,9 +653,31 @@ const validateFields = () => {
         updateData.append('co2_emission', fields.co2_emission.value);
       }
 
-      // Handle media files if any
+      // Enhanced document handling
+      console.log('📎 Processing documents:', {
+        existing: existingDocuments,
+        new: mediaFiles,
+        toDelete: documentsToDelete
+      });
+
+      // Add documents to delete (if any)
+      if (documentsToDelete.length > 0) {
+        updateData.append('documents', "null");
+      }
+
+      // Handle new document uploads
       if (mediaFiles && mediaFiles.length > 0) {
+        let documentIndex = 0;
+        let videoIndex = 0;
+        
         mediaFiles.forEach((file, index) => {
+          console.log(`📎 Processing file ${index + 1}:`, {
+            name: file.name,
+            type: file.type,
+            category: file.category,
+            size: file.size
+          });
+
           if (file.category === 'images') {
             updateData.append('images[]', {
               uri: file.uri,
@@ -613,16 +685,34 @@ const validateFields = () => {
               name: file.name || `image_${index}.jpg`,
             });
           } else if (file.category === 'documents') {
-            updateData.append('documents[]', {
+            updateData.append(`pdf_documents[${documentIndex}]`, {
               uri: file.uri,
               type: file.type || 'application/pdf',
-              name: file.name || `document_${index}.pdf`,
+              name: file.name || `document_${documentIndex}.pdf`,
             });
+            // Also add to generic documents for backward compatibility
+            updateData.append(`documents[${documentIndex}]`, {
+              uri: file.uri,
+              type: file.type || 'application/pdf',
+              name: file.name || `document_${documentIndex}.pdf`,
+            });
+            documentIndex++;
+          } else if (file.category === 'videos') {
+            updateData.append(`videos[${videoIndex}]`, {
+              uri: file.uri,
+              type: file.type || 'video/mp4',
+              name: file.name || `video_${videoIndex}.mp4`,
+            });
+            videoIndex++;
           }
         });
+
+        // Add file counts for server processing
+        updateData.append('document_count', documentIndex.toString());
+        updateData.append('video_count', videoIndex.toString());
       }
 
-      console.log('🔄 Updating product with ID:', updateData || productData?.ID);
+      console.log('🔄 Updating product with documents...' , updateData);
 
       // Call update API
       const response = await fetch('https://greenbidz.com/wp-json/greenbidz-api/v1/product/update', {
@@ -641,8 +731,8 @@ const validateFields = () => {
 
       if (result.success || response.ok) {
         showSuccess({
-          title: 'Success!',
-          message: 'Product updated successfully.',
+          title: t('editProduct.messages.updateSuccess'),
+          message: t('editProduct.messages.updateSuccessMessage'),
           onPress: () => {
             navigation.goBack();
           },
@@ -654,16 +744,18 @@ const validateFields = () => {
     } catch (error) {
       console.error('❌ Update error:', error);
       
-      let errorMessage = 'Failed to update product. Please try again.';
+      let errorMessage = t('editProduct.messages.updateFailedMessage');
       
       if (error.message === 'Network Error') {
-        errorMessage = 'Network error. Please check your connection and try again.';
+        errorMessage = t('editProduct.messages.networkError');
+      } else if (error.message.includes('file')) {
+        errorMessage = t('editProduct.messages.fileUploadError');
       } else if (error.message) {
         errorMessage = error.message;
       }
 
       showError({
-        title: 'Update Failed',
+        title: t('editProduct.messages.updateFailed'),
         message: errorMessage,
       });
     } finally {
@@ -671,9 +763,141 @@ const validateFields = () => {
     }
   };
 
-  // Media files handler
+  // Enhanced media files handler with validation
   const handleMediaFilesChange = (files) => {
-    setMediaFiles(files);
+    console.log('📎 Media files changed:', files);
+    
+    // Validate file types and sizes
+    const validFiles = files.filter(file => {
+      const maxSize = file.category === 'videos' ? 100 * 1024 * 1024 : 10 * 1024 * 1024; // 100MB for videos, 10MB for documents
+      
+      if (file.size > maxSize) {
+        const maxSizeText = file.category === 'videos' ? '100MB' : '10MB';
+        showError({
+          title: t('editProduct.messages.fileTooLarge'),
+          message: t('editProduct.messages.fileTooLargeMessage', { fileName: file.name, maxSize: maxSizeText }),
+        });
+        return false;
+      }
+      
+      return true;
+    });
+    
+    setMediaFiles(validFiles);
+  };
+
+  // Function to handle existing document deletion
+  const handleDeleteExistingDocument = (documentId, documentName) => {
+    showConfirm({
+      title: t('editProduct.documents.deleteDocument'),
+      message: t('editProduct.documents.deleteConfirmMessage', { name: documentName }),
+      onConfirm: () => {
+        setDocumentsToDelete(prev => [...prev, documentId]);
+        setExistingDocuments(prev => prev.filter(doc => doc.id !== documentId));
+        
+        showSuccess({
+          title: t('editProduct.documents.documentMarkedForDeletion'),
+          message: t('editProduct.documents.documentWillBeRemoved'),
+        });
+      },
+    });
+  };
+
+  // Enhanced existing documents display component
+  const renderExistingDocuments = () => {
+    if (existingDocuments.length === 0) {
+      return (
+        <View style={styles.noDocumentsContainer}>
+          <Icon name="file" size={24} color={COLORS.textMuted} />
+          <Text style={styles.noDocumentsText}>{t('editProduct.documents.noExistingDocuments')}</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.existingDocumentsContainer}>
+        <Text style={styles.existingDocumentsTitle}>
+          {t('editProduct.documents.currentDocuments', { count: existingDocuments.length })}
+        </Text>
+        {existingDocuments.map((doc, index) => {
+          const isMarkedForDeletion = documentsToDelete.includes(doc.id);
+          
+          return (
+            <View 
+              key={doc.id || index} 
+              style={[
+                styles.existingDocumentItem,
+                isMarkedForDeletion && styles.documentMarkedForDeletion
+              ]}
+            >
+              <View style={styles.documentInfo}>
+                <Icon 
+                  name={doc.type === 'pdf' ? 'file-text' : 'file'} 
+                  size={16} 
+                  color={isMarkedForDeletion ? COLORS.textMuted : COLORS.primary} 
+                />
+                <View style={styles.documentDetails}>
+                  <Text 
+                    style={[
+                      styles.documentName,
+                      isMarkedForDeletion && styles.documentNameDeleted
+                    ]} 
+                    numberOfLines={1}
+                  >
+                    {doc.name || doc.filename || `Document ${index + 1}`}
+                  </Text>
+                  <Text style={styles.documentSize}>
+                    {doc.type?.toUpperCase() || 'PDF'} • {doc.size ? `${(doc.size / 1024).toFixed(1)} KB` : 'Unknown size'}
+                  </Text>
+                  {isMarkedForDeletion && (
+                    <Text style={styles.deletionStatus}>{t('editProduct.documents.markedForDeletion')}</Text>
+                  )}
+                </View>
+              </View>
+              <View style={styles.documentActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.documentActionButton,
+                    isMarkedForDeletion && styles.documentActionDisabled
+                  ]}
+                  onPress={() => {
+                    // Open document in browser or download
+                    if (doc.url && !isMarkedForDeletion) {
+                      Linking.openURL(doc.url);
+                    }
+                  }}
+                  disabled={isMarkedForDeletion}
+                >
+                  <Icon 
+                    name="external-link" 
+                    size={14} 
+                    color={isMarkedForDeletion ? COLORS.textMuted : COLORS.primary} 
+                  />
+                </TouchableOpacity>
+                {isMarkedForDeletion ? (
+                  <TouchableOpacity
+                    style={[styles.documentActionButton, styles.undoButton]}
+                    onPress={() => {
+                      // Undo deletion
+                      setDocumentsToDelete(prev => prev.filter(id => id !== doc.id));
+                    }}
+                  >
+                    <Icon name="rotate-ccw" size={14} color={COLORS.warning} />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.documentActionButton, styles.deleteButton]}
+                    onPress={() => handleDeleteExistingDocument(doc.id, doc.name || doc.filename)}
+                  >
+                    <Icon name="trash-2" size={14} color={COLORS.error} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
   };
 
   // Render functions
@@ -684,7 +908,7 @@ const validateFields = () => {
       return (
         <View style={styles.imagePlaceholder}>
           <Icon name="camera" size={24} color={COLORS.textMuted} />
-          <Text style={styles.placeholderText}>No Images Available</Text>
+          <Text style={styles.placeholderText}>{t('editProduct.images.noImagesAvailable')}</Text>
         </View>
       );
     }
@@ -780,7 +1004,7 @@ const validateFields = () => {
             onChangeText={text => onChangeText(key, text)}
             onBlur={() => onBlur(key)}
             autoFocus
-            placeholder={`Enter ${label.toLowerCase()}`}
+            placeholder={props.placeholder || `${t('editProduct.placeholders.enterProductTitle').replace('product title', label.toLowerCase())}`}
             placeholderTextColor={COLORS.textMuted}
             {...props}
           />
@@ -798,7 +1022,7 @@ const validateFields = () => {
                 props.multiline && styles.fieldTextMultiline,
               ]}
             >
-              {fields[key]?.value || `Enter ${label.toLowerCase()}`}
+              {fields[key]?.value || `${t('editProduct.placeholders.enterProductTitle').replace('product title', label.toLowerCase())}`}
             </Text>
             <Icon name="edit-2" size={16} color={COLORS.textMuted} />
           </TouchableOpacity>
@@ -854,7 +1078,7 @@ const validateFields = () => {
                 }}
                 keyboardType="decimal-pad"
                 onBlur={() => onBlur(key)}
-                placeholder="0.00"
+                placeholder={t('editProduct.placeholders.enterPrice')}
                 placeholderTextColor={COLORS.textMuted}
                 autoFocus
               />
@@ -886,7 +1110,7 @@ const validateFields = () => {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading product data...</Text>
+        <Text style={styles.loadingText}>{t('editProduct.loadingProduct')}</Text>
       </View>
     );
   }
@@ -907,9 +1131,9 @@ const validateFields = () => {
             </TouchableOpacity>
 
             <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Edit Product</Text>
+              <Text style={styles.headerTitle}>{t('editProduct.title')}</Text>
               <Text style={styles.headerSubtitle}>
-                Update your listing details
+                {t('editProduct.subtitle')}
               </Text>
             </View>
 
@@ -935,62 +1159,70 @@ const validateFields = () => {
       >
         {/* Images Section */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Product Images</Text>
+          <Text style={styles.sectionTitle}>{t('editProduct.sections.productImages')}</Text>
           {renderImageGallery()}
         </Animated.View>
 
         {/* Basic Information */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Basic Information</Text>
+          <Text style={styles.sectionTitle}>{t('editProduct.sections.basicInformation')}</Text>
           <View style={styles.card}>
-            {renderFieldInput('name', 'Product Title', 'tag')}
+            {renderFieldInput('name', t('editProduct.fields.productTitle'), 'tag', {
+              placeholder: t('editProduct.placeholders.enterProductTitle')
+            })}
 
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
-                {renderFieldInput('brand', 'Brand', 'award')}
+                {renderFieldInput('brand', t('editProduct.fields.brand'), 'award', {
+                  placeholder: t('editProduct.placeholders.enterBrand')
+                })}
               </View>
               <View style={styles.fieldHalf}>
-                {renderFieldInput('model', 'Model', 'cpu')}
+                {renderFieldInput('model', t('editProduct.fields.model'), 'cpu', {
+                  placeholder: t('editProduct.placeholders.enterModel')
+                })}
               </View>
             </View>
 
-            {renderFieldInput('year', 'Manufacturing Year', 'calendar', {
+            {renderFieldInput('year', t('editProduct.fields.manufacturingYear'), 'calendar', {
               keyboardType: 'numeric',
+              placeholder: t('editProduct.placeholders.enterYear')
             })}
 
-            {renderFieldInput('equipment_description', 'Description', 'file-text', {
+            {renderFieldInput('equipment_description', t('editProduct.fields.description'), 'file-text', {
               multiline: true,
               numberOfLines: 4,
+              placeholder: t('editProduct.placeholders.enterDescription')
             })}
 
-            {renderFieldInput('dimensions', 'Dimensions (L x W x H)', 'maximize', {
-              placeholder: 'e.g., 120 x 80 x 60 cm',
+            {renderFieldInput('dimensions', t('editProduct.fields.dimensions'), 'maximize', {
+              placeholder: t('editProduct.placeholders.enterDimensions'),
             })}
 
-            {renderFieldInput('co2_emission', 'CO2 Emission (kg/year)', 'wind', {
+            {renderFieldInput('co2_emission', t('editProduct.fields.co2Emission'), 'wind', {
               keyboardType: 'decimal-pad',
-              placeholder: 'Enter estimated CO2 emission',
+              placeholder: t('editProduct.placeholders.enterCO2Emission'),
             })}
           </View>
         </Animated.View>
 
         {/* Condition & Status */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Condition & Status</Text>
+          <Text style={styles.sectionTitle}>{t('editProduct.sections.conditionStatus')}</Text>
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
                 <View style={styles.fieldContainer}>
                   <View style={styles.fieldHeader}>
                     <Icon name="shield-check" size={16} color={COLORS.primary} />
-                    <Text style={styles.fieldLabel}>Condition</Text>
+                    <Text style={styles.fieldLabel}>{t('editProduct.fields.condition')}</Text>
                   </View>
                   <CustomDropdown
-                    options={CONDITIONS}
+                    options={getConditionOptions()}
                     selectedValue={fields.condition?.value || ''}
                     onSelect={(value) => onChangeText('condition', value)}
-                    placeholder="Select condition"
-                    label="Item Condition"
+                    placeholder={t('editProduct.placeholders.selectCondition')}
+                    label={t('editProduct.fields.condition')}
                   />
                 </View>
               </View>
@@ -998,14 +1230,14 @@ const validateFields = () => {
                 <View style={styles.fieldContainer}>
                   <View style={styles.fieldHeader}>
                     <Icon name="activity" size={16} color={COLORS.primary} />
-                    <Text style={styles.fieldLabel}>Operation Status</Text>
+                    <Text style={styles.fieldLabel}>{t('editProduct.fields.operationStatus')}</Text>
                   </View>
                   <CustomDropdown
-                    options={OPERATION_STATUS}
+                    options={getOperationStatusOptions()}
                     selectedValue={fields.operation_status?.value || ''}
                     onSelect={(value) => onChangeText('operation_status', value)}
-                    placeholder="Select operation status"
-                    label="Operation Status"
+                    placeholder={t('editProduct.placeholders.selectOperationStatus')}
+                    label={t('editProduct.fields.operationStatus')}
                   />
                 </View>
               </View>
@@ -1016,26 +1248,26 @@ const validateFields = () => {
         {/* Pricing Information - Only show for marketplace products */}
         {fields.product_type?.value !== 'auction' && (
           <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-            <Text style={styles.sectionTitle}>Pricing Information</Text>
+            <Text style={styles.sectionTitle}>{t('editProduct.sections.pricingInformation')}</Text>
             <View style={styles.card}>
               <View style={styles.fieldRow}>
                 <View style={styles.fieldHalf}>
                   <View style={styles.fieldContainer}>
                     <View style={styles.fieldHeader}>
                       <Icon name="dollar-sign" size={16} color={COLORS.primary} />
-                      <Text style={styles.fieldLabel}>Currency</Text>
+                      <Text style={styles.fieldLabel}>{t('editProduct.fields.currency')}</Text>
                     </View>
                     <CustomDropdown
                       options={CURRENCIES}
                       selectedValue={fields.currency?.value || ''}
                       onSelect={(value) => onChangeText('currency', value)}
-                      placeholder="Select currency"
-                      label="Currency"
+                      placeholder={t('editProduct.placeholders.selectCurrency')}
+                      label={t('editProduct.fields.currency')}
                     />
                   </View>
                 </View>
                 <View style={styles.fieldHalf}>
-                  {renderPriceField('original_price', 'Price', 'tag')}
+                  {renderPriceField('original_price', t('editProduct.fields.price'), 'tag')}
                 </View>
               </View>
             </View>
@@ -1044,7 +1276,7 @@ const validateFields = () => {
 
         {/* Product Type */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Product Type</Text>
+          <Text style={styles.sectionTitle}>{t('editProduct.sections.productType')}</Text>
           <View style={styles.card}>
             <View style={styles.productTypeContainer}>
               <TouchableOpacity
@@ -1069,9 +1301,9 @@ const validateFields = () => {
                     styles.productTypeTitle,
                     fields.product_type?.value === 'marketplace' && styles.productTypeTextActive,
                   ]}>
-                    Marketplace
+                    {t('editProduct.productTypes.marketplace')}
                   </Text>
-                  <Text style={styles.productTypeDescription}>Sell at fixed price</Text>
+                  <Text style={styles.productTypeDescription}>{t('editProduct.productTypes.marketplaceDesc')}</Text>
                 </View>
                 {fields.product_type?.value === 'marketplace' && (
                   <Icon name="check-circle" size={16} color="#6366f1" />
@@ -1100,9 +1332,9 @@ const validateFields = () => {
                     styles.productTypeTitle,
                     fields.product_type?.value === 'auction' && styles.productTypeTextActive,
                   ]}>
-                    Auction
+                    {t('editProduct.productTypes.auction')}
                   </Text>
-                  <Text style={styles.productTypeDescription}>Let buyers bid</Text>
+                  <Text style={styles.productTypeDescription}>{t('editProduct.productTypes.auctionDesc')}</Text>
                 </View>
                 {fields.product_type?.value === 'auction' && (
                   <Icon name="check-circle" size={16} color="#6366f1" />
@@ -1114,57 +1346,52 @@ const validateFields = () => {
 
         {/* Location & Category */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Location & Category</Text>
+          <Text style={styles.sectionTitle}>{t('editProduct.sections.locationCategory')}</Text>
           <View style={styles.card}>
             <View style={styles.fieldContainer}>
               <View style={styles.fieldHeader}>
                 <Icon name="list" size={16} color={COLORS.primary} />
-                <Text style={styles.fieldLabel}>Category</Text>
+                <Text style={styles.fieldLabel}>{t('editProduct.fields.category')}</Text>
               </View>
-              {console.log(fields,"fieldsfieldsfields" )}
               <CustomDropdown
                 options={categories.map(cat => cat.name)}
                 selectedValue={fields.parent_category?.value || ''}
                 onSelect={(value) => {
                   onChangeText('parent_category', value);
                 }}
-                placeholder="Select category"
-                label="Product Category"
+                placeholder={t('editProduct.placeholders.selectCategory')}
+                label={t('editProduct.fields.category')}
                 loading={loadingCategories}
               />
             </View>
 
             {/* Subcategory dropdown with proper conditional rendering */}
-            {/* {subCategories.length > 0 && ( */}
-              <View style={styles.fieldContainer}>
-                <View style={styles.fieldHeader}>
-                  <Icon name="tag" size={16} color={COLORS.primary} />
-                  <Text style={styles.fieldLabel}>Sub Category</Text>
-                </View>
-                {/* {console.log()} */}
-                
-                <CustomDropdown
-                  options={subCategories}
-                  selectedValue={fields.sub_category?.value || ''}
-                  onSelect={(value) => onChangeText('sub_category', value)}
-                  placeholder="Select subcategory"
-                  label="Product Subcategory"
-                  loading={loadingSubCategories}
-                />
+            <View style={styles.fieldContainer}>
+              <View style={styles.fieldHeader}>
+                <Icon name="tag" size={16} color={COLORS.primary} />
+                <Text style={styles.fieldLabel}>{t('editProduct.fields.subCategory')}</Text>
               </View>
-            {/* )} */}
+              <CustomDropdown
+                options={subCategories}
+                selectedValue={fields.sub_category?.value || ''}
+                onSelect={(value) => onChangeText('sub_category', value)}
+                placeholder={t('editProduct.placeholders.selectSubcategory')}
+                label={t('editProduct.fields.subCategory')}
+                loading={loadingSubCategories}
+              />
+            </View>
 
             <View style={styles.fieldContainer}>
               <View style={styles.fieldHeader}>
                 <Icon name="map-pin" size={16} color={COLORS.primary} />
-                <Text style={styles.fieldLabel}>Location</Text>
+                <Text style={styles.fieldLabel}>{t('editProduct.fields.location')}</Text>
               </View>
               <CustomDropdown
                 options={locations}
                 selectedValue={fields.item_location?.value || ''}
                 onSelect={(value) => onChangeText('item_location', value)}
-                placeholder="Select location"
-                label="Item Location"
+                placeholder={t('editProduct.placeholders.selectLocation')}
+                label={t('editProduct.fields.location')}
                 loading={loadingLocations}
               />
             </View>
@@ -1174,19 +1401,19 @@ const validateFields = () => {
         {/* Auction Settings - Only show if product type is Auction */}
         {fields.product_type?.value === 'auction' && (
           <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-            <Text style={styles.sectionTitle}>Auction Settings</Text>
+            <Text style={styles.sectionTitle}>{t('editProduct.sections.auctionSettings')}</Text>
             <View style={styles.card}>
               <View style={styles.fieldContainer}>
                 <View style={styles.fieldHeader}>
                   <Icon name="users" size={16} color={COLORS.primary} />
-                  <Text style={styles.fieldLabel}>Auction Group</Text>
+                  <Text style={styles.fieldLabel}>{t('editProduct.fields.auctionGroup')}</Text>
                 </View>
                 <CustomDropdown
                   options={auctionGroups}
                   selectedValue={fields.auction_group?.value || ''}
                   onSelect={(value) => onChangeText('auction_group', value)}
-                  placeholder="Select auction group"
-                  label="Auction Group"
+                  placeholder={t('editProduct.placeholders.selectAuctionGroup')}
+                  label={t('editProduct.fields.auctionGroup')}
                   loading={loadingAuctionGroups}
                 />
               </View>
@@ -1196,26 +1423,8 @@ const validateFields = () => {
                   <View style={styles.fieldContainer}>
                     <View style={styles.fieldHeader}>
                       <Icon name="calendar" size={16} color={COLORS.primary} />
-                      <Text style={styles.fieldLabel}>Start Date</Text>
+                      <Text style={styles.fieldLabel}>{t('editProduct.fields.endDate')}</Text>
                     </View>
-                    <CustomDateTimePicker
-                      value={fields.auction_start_time?.value ? new Date(fields.auction_start_time.value) : null}
-                      onChange={(iso) => onChangeText('auction_start_time', iso || '')}
-                      textStyle={styles.datePickerText}
-                    />
-                    {validationErrors.auction_start_time && (
-                      <Text style={styles.errorText}>{validationErrors.auction_start_time}</Text>
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.fieldHalf}>
-                  <View style={styles.fieldContainer}>
-                    <View style={styles.fieldHeader}>
-                      <Icon name="calendar" size={16} color={COLORS.primary} />
-                      <Text style={styles.fieldLabel}>End Date</Text>
-                    </View>
-                    {console.log(fields,"auction_end_timeauction_end_time")}
                     <CustomDateTimePicker
                       value={fields.auction_end_time?.value ? new Date(fields.auction_end_time.value) : null}
                       onChange={(iso) => onChangeText('auction_end_time', iso || '')}
@@ -1232,7 +1441,7 @@ const validateFields = () => {
               <View style={styles.fieldContainer}>
                 <View style={styles.fieldHeader}>
                   <Icon name="dollar-sign" size={16} color={COLORS.warning} />
-                  <Text style={styles.fieldLabel}>Auction Currency</Text>
+                  <Text style={styles.fieldLabel}>{t('editProduct.fields.auctionCurrency')}</Text>
                 </View>
                 <CustomDropdown
                   options={CURRENCIES}
@@ -1242,13 +1451,13 @@ const validateFields = () => {
                     'USD ($)'
                   }
                   onSelect={(value) => onChangeText('auction_currency', value)}
-                  placeholder="Select auction currency"
-                  label="Auction Currency"
+                  placeholder={t('editProduct.placeholders.selectCurrency')}
+                  label={t('editProduct.fields.auctionCurrency')}
                   hasError={!!validationErrors.auction_currency}
                 />
                 {fields.currency?.value && (
                   <Text style={styles.currencyInfo}>
-                    Based on listing currency: {fields.currency.value}
+                    {t('editProduct.messages.currencyBasedOn', { currency: fields.currency.value })}
                   </Text>
                 )}
                 {validationErrors.auction_currency && (
@@ -1256,43 +1465,58 @@ const validateFields = () => {
                 )}
               </View>
 
-              {/* Auction increment field */}
-              {/* <View style={styles.fieldContainer}>
-                <View style={styles.fieldHeader}>
-                  <Icon name="trending-up" size={16} color={COLORS.primary} />
-                  <Text style={styles.fieldLabel}>Bid Increment</Text>
-                </View>
-                {renderFieldInput('auction_increment', 'Bid Increment', 'trending-up', {
-                  keyboardType: 'decimal-pad',
-                  placeholder: 'Enter minimum bid increment',
-                })}
-              </View> */}
-
               <View style={styles.fieldRow}>
                 <View style={styles.fieldHalf}>
-                  {renderPriceField('auction_start_price', 'Starting Bid Price', 'play-circle')}
+                  {renderPriceField('auction_start_price', t('editProduct.fields.startingBidPrice'), 'play-circle')}
                 </View>
                 <View style={styles.fieldHalf}>
-                  {renderPriceField('auction_reserve', 'Reserve Price', 'shield')}
+                  {renderPriceField('auction_reserve', t('editProduct.fields.reservePrice'), 'shield')}
                 </View>
               </View>
             </View>
           </Animated.View>
         )}
 
-        {/* Media Upload */}
+        {/* Documents & Media Upload */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Additional Media & Documents</Text>
+          <Text style={styles.sectionTitle}>{t('editProduct.sections.documentsMedia')}</Text>
           <View style={styles.card}>
+            {/* Show existing documents */}
+            {renderExistingDocuments()}
+            
+            {/* Document upload component */}
             <DocumentsUploadComponent
               onFilesSelected={handleMediaFilesChange}
               uploadedFiles={mediaFiles}
               maxFiles={10}
               allowedTypes={['documents', 'videos']}
+              acceptedFormats={{
+                documents: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'],
+                videos: ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm']
+              }}
+              is_editing={true}
             />
+            
             <Text style={styles.mediaHint}>
-              Upload additional documents, videos, or other supporting files for your listing.
+              {t('editProduct.documents.uploadHint')}
             </Text>
+            
+            {/* Show upload progress or status */}
+            {mediaFiles.length > 0 && (
+              <View style={styles.uploadSummary}>
+                <Text style={styles.uploadSummaryText}>
+                  {t('editProduct.documents.newFilesReady', { count: mediaFiles.length })}
+                </Text>
+              </View>
+            )}
+            
+            {documentsToDelete.length > 0 && (
+              <View style={styles.deleteSummary}>
+                <Text style={styles.deleteSummaryText}>
+                  {t('editProduct.documents.documentsMarkedForDeletion', { count: documentsToDelete.length })}
+                </Text>
+              </View>
+            )}
           </View>
         </Animated.View>
 
@@ -1309,12 +1533,12 @@ const validateFields = () => {
             {isUpdating ? (
               <>
                 <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.submitText}>Updating...</Text>
+                <Text style={styles.submitText}>{t('editProduct.updating')}</Text>
               </>
             ) : (
               <>
                 <Icon name="save" size={20} color="#fff" />
-                <Text style={styles.submitText}>Update Product</Text>
+                <Text style={styles.submitText}>{t('editProduct.updateProduct')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -1753,6 +1977,134 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontStyle: 'italic',
     marginTop: scaleHeight(4),
+    fontFamily: FONTS.regular,
+  },
+
+  // Document Management Styles
+  noDocumentsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: scaleHeight(32),
+    backgroundColor: COLORS.light,
+    borderRadius: scaleWidth(12),
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    marginBottom: scaleHeight(16),
+  },
+  noDocumentsText: {
+    fontSize: scaleFont(14),
+    color: COLORS.textMuted,
+    fontFamily: FONTS.regular,
+    marginTop: scaleHeight(8),
+  },
+  existingDocumentsContainer: {
+    marginBottom: scaleHeight(16),
+  },
+  existingDocumentsTitle: {
+    fontSize: scaleFont(14),
+    fontFamily: FONTS.medium,
+    color: COLORS.textPrimary,
+    marginBottom: scaleHeight(12),
+  },
+  existingDocumentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: scaleHeight(12),
+    paddingHorizontal: scaleWidth(16),
+    backgroundColor: COLORS.light,
+    borderRadius: scaleWidth(8),
+    marginBottom: scaleHeight(8),
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  documentMarkedForDeletion: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fca5a5',
+    opacity: 0.7,
+  },
+  documentInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleWidth(12),
+  },
+  documentDetails: {
+    flex: 1,
+  },
+  documentName: {
+    fontSize: scaleFont(13),
+    fontFamily: FONTS.medium,
+    color: COLORS.textPrimary,
+  },
+  documentNameDeleted: {
+    textDecorationLine: 'line-through',
+    color: COLORS.textMuted,
+  },
+  documentSize: {
+    fontSize: scaleFont(11),
+    fontFamily: FONTS.regular,
+    color: COLORS.textMuted,
+    marginTop: scaleHeight(2),
+  },
+  deletionStatus: {
+    fontSize: scaleFont(10),
+    fontFamily: FONTS.medium,
+    color: COLORS.error,
+    marginTop: scaleHeight(2),
+  },
+  documentActions: {
+    flexDirection: 'row',
+    gap: scaleWidth(8),
+  },
+  documentActionButton: {
+    padding: scaleWidth(8),
+    borderRadius: scaleWidth(6),
+    backgroundColor: COLORS.cardBackground,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  documentActionDisabled: {
+    opacity: 0.5,
+  },
+  deleteButton: {
+    borderColor: COLORS.error,
+    backgroundColor: '#fef2f2',
+  },
+  undoButton: {
+    borderColor: COLORS.warning,
+    backgroundColor: '#fefbf2',
+  },
+
+  // Upload Status
+  uploadSummary: {
+    marginTop: scaleHeight(12),
+    padding: scaleWidth(12),
+    backgroundColor: '#f0f9ff',
+    borderRadius: scaleWidth(8),
+    borderWidth: 1,
+    borderColor: '#0ea5e9',
+  },
+  uploadSummaryText: {
+    fontSize: scaleFont(12),
+    color: '#0369a1',
+    fontFamily: FONTS.medium,
+    textAlign: 'center',
+  },
+  deleteSummary: {
+    marginTop: scaleHeight(8),
+    padding: scaleWidth(12),
+    backgroundColor: '#fef2f2',
+    borderRadius: scaleWidth(8),
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  deleteSummaryText: {
+    fontSize: scaleFont(12),
+    color: '#dc2626',
+    fontFamily: FONTS.medium,
+    textAlign: 'center',
   },
 
   // Media Upload
@@ -1762,6 +2114,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: scaleHeight(8),
     textAlign: 'center',
+    fontFamily: FONTS.regular,
   },
 
   // Submit Button

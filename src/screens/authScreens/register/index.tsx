@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import Icon from 'react-native-vector-icons/Feather';
+import { useTranslation } from 'react-i18next';
+import { useDispatch } from 'react-redux';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   scaleWidth,
   scaleHeight,
@@ -27,6 +30,20 @@ import { apiService } from '../../../api/axiosConfig';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
 import CustomAlert from '../../../components/CustomAlert';
 import CustomDropdown from '../../../components/CustomDropdown';
+import {
+  setPendingNavigation,
+  clearPendingNavigation,
+  clearAuthError,
+} from '../../../store/slices/authSlice';
+
+// Font family constants
+const FONTS = {
+  regular: 'Poppins-Regular',
+  medium: 'Poppins-Medium',
+  semiBold: 'Poppins-SemiBold',
+  bold: 'Poppins-Bold',
+  light: 'Poppins-Light',
+};
 
 interface FormData {
   firstName: string;
@@ -43,7 +60,13 @@ interface FormData {
   greenbidz_user_type: 'buyer' | 'seller';
 }
 
-const SignupFlow = ({ navigation }: { navigation: any }) => {
+const SignupFlow = ({ navigation, route }: { navigation: any; route: any }) => {
+  const { t } = useTranslation();
+  const dispatch = useDispatch();
+  
+  // Get navigation context passed from login screen
+  const { fromScreen, screenParams, originalPendingNavigation } = route.params || {};
+  
   const [userType, setUserType] = useState<'buyer' | 'seller'>('buyer');
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,52 +79,54 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
     countryCode: '+61', // Default to Australia
     password: '',
     confirmPassword: '',
-    country: 'Australia',
+    country: t('signup.countries.australia'),
     company: '',
-    role: 'Owner',
-    businessType: 'Manufacturer',
+    role: t('signup.roles.owner'),
+    businessType: t('signup.businessTypes.manufacturer'),
     greenbidz_user_type: 'buyer',
   });
 
-  const countries = [
-    'Australia',
-    'Bangladesh',
-    'Cambodia',
-    'Canada',
-    'Chile',
-    'China',
-    'Denmark',
-    'France',
-    'Germany',
-    'Hong Kong',
-    'India',
-    'Indonesia',
-    'Japan',
-    'Macao',
-    'Malaysia',
-    'Mexico',
-    'New Zealand',
-    'Pakistan',
-    'South Korea',
-    'Taiwan',
-    'Thailand',
-    'Vietnam'
+  // Get localized dropdown options
+  const getCountries = () => [
+    t('signup.countries.australia'),
+    t('signup.countries.bangladesh'),
+    t('signup.countries.cambodia'),
+    t('signup.countries.canada'),
+    t('signup.countries.chile'),
+    t('signup.countries.china'),
+    t('signup.countries.denmark'),
+    t('signup.countries.france'),
+    t('signup.countries.germany'),
+    t('signup.countries.hongKong'),
+    t('signup.countries.india'),
+    t('signup.countries.indonesia'),
+    t('signup.countries.japan'),
+    t('signup.countries.macao'),
+    t('signup.countries.malaysia'),
+    t('signup.countries.mexico'),
+    t('signup.countries.newZealand'),
+    t('signup.countries.pakistan'),
+    t('signup.countries.southKorea'),
+    t('signup.countries.taiwan'),
+    t('signup.countries.thailand'),
+    t('signup.countries.vietnam')
   ];
 
-  const roles = [
-    'Owner',
-    'Management',
-    'Purchasing',
-    'Sales',
-    'Technical',
-    'Others',
+  const getRoles = () => [
+    t('signup.roles.owner'),
+    t('signup.roles.management'),
+    t('signup.roles.purchasing'),
+    t('signup.roles.sales'),
+    t('signup.roles.technical'),
+    t('signup.roles.others'),
   ];
-  const businessTypes = [
-    'Manufacturer',
-    'Enterprise',
-    'Broker',
-    'System Integrator',
-    'Recycler',
+
+  const getBusinessTypes = () => [
+    t('signup.businessTypes.manufacturer'),
+    t('signup.businessTypes.enterprise'),
+    t('signup.businessTypes.broker'),
+    t('signup.businessTypes.systemIntegrator'),
+    t('signup.businessTypes.recycler'),
   ];
 
   const {
@@ -132,45 +157,45 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
       formData;
 
     if (!firstName.trim()) {
-      showToast('Error', 'First name is required');
+      showToast(t('signup.messages.error'), t('signup.validation.firstNameRequired'));
       return false;
     }
     if (!lastName.trim()) {
-      showToast('Error', 'Last name is required');
+      showToast(t('signup.messages.error'), t('signup.validation.lastNameRequired'));
       return false;
     }
     if (!email.trim() || !email.includes('@')) {
-      showToast('Error', 'Valid email is required');
+      showToast(t('signup.messages.error'), t('signup.validation.emailRequired'));
       return false;
     }
     
     // Validate phone number using the helper function
     const phoneValidation = validatePhoneNumber(countryCode, phone);
     if (!phoneValidation.isValid) {
-      setPhoneError(phoneValidation.error || 'Invalid phone number');
-      showToast('Error', phoneValidation.error || 'Invalid phone number');
+      setPhoneError(phoneValidation.error || t('signup.validation.invalidPhone'));
+      showToast(t('signup.messages.error'), phoneValidation.error || t('signup.validation.invalidPhone'));
       return false;
     }
     
     if (!password.trim() || password.length < 6) {
-      showToast('Error', 'Password must be at least 6 characters');
+      showToast(t('signup.messages.error'), t('signup.validation.passwordRequired'));
       return false;
     }
     if (password !== confirmPassword) {
-      showToast('Error', 'Passwords do not match');
+      showToast(t('signup.messages.error'), t('signup.validation.passwordMismatch'));
       return false;
     }
     return true;
-  }, [formData, showError]);
+  }, [formData, showError, t]);
 
   const validateStep2 = useCallback(() => {
     const { company } = formData;
     if (!company.trim()) {
-      showToast('Error', 'Company name is required');
+      showToast(t('signup.messages.error'), t('signup.validation.companyRequired'));
       return false;
     }
     return true;
-  }, [formData, showError]);
+  }, [formData, showError, t]);
 
   const handleNext = useCallback(() => {
     if (currentStep === 1 && validateStep1()) {
@@ -185,6 +210,43 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
       setCurrentStep(currentStep - 1);
     }
   }, [currentStep]);
+
+  // FIXED: Handle successful signup navigation
+  const handleSuccessfulSignup = useCallback(async () => {
+    // Priority 1: Navigate back to the screen that brought us here (fromScreen param)
+    if (fromScreen) {
+      console.log('✅ Navigating back to fromScreen after signup:', fromScreen);
+
+      try {
+        if (screenParams) {
+          navigation.navigate(fromScreen, screenParams);
+        } else {
+          navigation.navigate(fromScreen);
+        }
+        return;
+      } catch (error) {
+        console.error('❌ Error navigating to fromScreen after signup:', error);
+        // Fall through to other options
+      }
+    }
+
+    // Priority 2: Check for pending navigation from Redux or params
+    if (originalPendingNavigation) {
+      console.log('✅ Navigating to pending screen after signup:', originalPendingNavigation);
+      try {
+        dispatch(clearPendingNavigation());
+        navigation.navigate(originalPendingNavigation);
+        return;
+      } catch (error) {
+        console.error('❌ Error navigating to pending screen after signup:', error);
+        // Fall through to default
+      }
+    }
+
+    // Priority 3: Default navigation (Dashboard, etc.)
+    console.log('✅ Navigating to Dashboard after signup (default)');
+    // navigation.navigate('Dashboard');
+  }, [fromScreen, screenParams, originalPendingNavigation, navigation, dispatch]);
 
   const handleSubmit = useCallback(async () => {
     try {
@@ -225,19 +287,53 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
 
       console.log('Registration successful:', response.data);
 
-      showSuccess(
-        'Registration Complete!',
-        `Welcome ${formData.firstName}! Your ${userType} account has been created successfully.`,
-      );
+      // FIXED: Store login credentials for automatic login
+      if (response.data && response.data.token) {
+        // Auto-login after successful registration
+        await AsyncStorage.setItem('userToken', response.data.token);
+        await AsyncStorage.setItem('isLoggedIn', 'true');
 
-      // Handle successful registration (navigate to next screen)
-      setTimeout(() => {
-        navigation.navigate('Login');
-      }, 2000);
+        // Store user data if provided
+        if (response.data.user_email || response.data.user_display_name) {
+          const userData = {
+            id: response.data.user_id || null,
+            email: response.data.user_email || formData.email,
+            displayName: response.data.user_display_name || `${formData.firstName} ${formData.lastName}`,
+            nicename: response.data.user_nicename || '',
+          };
+          await AsyncStorage.setItem('userData', JSON.stringify(userData));
+        }
+
+        showSuccess({
+          title: t('signup.messages.registrationComplete'),
+          message: t('signup.messages.welcomeMessage', { 
+            name: formData.firstName, 
+            userType: userType 
+          }),
+          buttonText: t('login.continue'),
+          onPress: () => {
+            handleSuccessfulSignup();
+          },
+        });
+      } else {
+        // If no auto-login, show success and navigate to login
+        showSuccess({
+          title: t('signup.messages.registrationComplete'),
+          message: t('signup.messages.welcomeMessage', { 
+            name: formData.firstName, 
+            userType: userType 
+          }),
+        });
+
+        // Navigate to login with context after a delay
+        setTimeout(() => {
+          handleNavigateToLogin();
+        }, 2000);
+      }
     } catch (error) {
       console.error('Registration error:', error);
 
-      let errorMessage = 'Registration failed. Please try again.';
+      let errorMessage = t('signup.messages.registrationError');
 
       if (error.response) {
         // Server responded with error status
@@ -251,21 +347,42 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
         ) {
           errorMessage = error.response.data;
         } else if (error.response.status === 422) {
-          errorMessage = 'Please check your information and try again.';
+          errorMessage = t('signup.messages.checkInformation');
         } else if (error.response.status === 409) {
-          errorMessage = 'An account with this email already exists.';
+          errorMessage = t('signup.messages.emailExists');
         }
       } else if (error.request) {
         // Network error
         console.error('Network error:', error.request);
-        errorMessage = 'Network error. Please check your internet connection.';
+        errorMessage = t('signup.messages.networkError');
       }
 
-      showError('Registration Failed', errorMessage);
+      showError({
+        title: t('signup.messages.registrationFailed'),
+        message: errorMessage,
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [formData, userType, navigation, showSuccess, showError]);
+  }, [formData, userType, handleSuccessfulSignup, showSuccess, showError, t]);
+
+  // FIXED: Navigate to login with navigation context
+  const handleNavigateToLogin = useCallback(() => {
+    // Pass the navigation context to login screen
+    const loginParams = {};
+    
+    if (fromScreen || originalPendingNavigation) {
+      loginParams.fromScreen = fromScreen;
+      loginParams.screenParams = screenParams;
+      
+      // Also set pending navigation in Redux if needed
+      if (originalPendingNavigation) {
+        dispatch(setPendingNavigation(originalPendingNavigation));
+      }
+    }
+    
+    navigation.navigate('Login', loginParams);
+  }, [fromScreen, screenParams, originalPendingNavigation, navigation, dispatch]);
 
   // Phone input handlers
   const handleCountryCodeChange = useCallback((code: string) => {
@@ -285,16 +402,16 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
       >
         <Icon name="arrow-left" size={24} color="white" />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>Create Account</Text>
+      <Text style={styles.headerTitle}>{t('signup.title')}</Text>
       <View style={styles.headerRight} />
     </View>
   );
 
   const ProgressIndicator = () => {
     const steps = [
-      { icon: 'shield', label: 'Account', step: 1 },
-      { icon: 'building', label: 'Company Info', step: 2 },
-      { icon: 'eye', label: 'Preview', step: 3 },
+      { icon: 'shield', label: t('signup.steps.account'), step: 1 },
+      { icon: 'briefcase', label: t('signup.steps.companyInfo'), step: 2 },
+      { icon: 'eye', label: t('signup.steps.preview'), step: 3 },
     ];
 
     return (
@@ -362,7 +479,7 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
             userType === 'buyer' && styles.activeUserTypeText,
           ]}
         >
-          I'm a Buyer
+          {t('signup.userType.buyerTitle')}
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -387,7 +504,7 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
             userType === 'seller' && styles.activeUserTypeText,
           ]}
         >
-          I'm a Seller
+          {t('signup.userType.sellerTitle')}
         </Text>
       </TouchableOpacity>
     </View>
@@ -400,16 +517,16 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Icon name="user" size={20} color="#6366f1" />
-              <Text style={styles.cardTitle}>Account Information</Text>
+              <Text style={styles.cardTitle}>{t('signup.accountInfo.title')}</Text>
             </View>
             <View style={styles.cardContent}>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>First Name *</Text>
+                <Text style={styles.label}>{t('signup.accountInfo.firstName')} *</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.firstName}
                   onChangeText={text => updateFormData('firstName', text)}
-                  placeholder="Enter first name"
+                  placeholder={t('signup.accountInfo.firstNamePlaceholder')}
                   placeholderTextColor="#9ca3af"
                   autoCapitalize="words"
                   textContentType="givenName"
@@ -417,12 +534,12 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Last Name *</Text>
+                <Text style={styles.label}>{t('signup.accountInfo.lastName')} *</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.lastName}
                   onChangeText={text => updateFormData('lastName', text)}
-                  placeholder="Enter last name"
+                  placeholder={t('signup.accountInfo.lastNamePlaceholder')}
                   placeholderTextColor="#9ca3af"
                   autoCapitalize="words"
                   textContentType="familyName"
@@ -430,12 +547,12 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email Address *</Text>
+                <Text style={styles.label}>{t('signup.accountInfo.email')} *</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.email}
                   onChangeText={text => updateFormData('email', text)}
-                  placeholder="Enter email address"
+                  placeholder={t('signup.accountInfo.emailPlaceholder')}
                   placeholderTextColor="#9ca3af"
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -449,20 +566,20 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
                 phoneNumber={formData.phone}
                 onCountryCodeChange={handleCountryCodeChange}
                 onPhoneNumberChange={handlePhoneNumberChange}
-                label="Phone"
-                placeholder="Enter phone number"
+                label={t('signup.accountInfo.phone')}
+                placeholder={t('signup.accountInfo.phonePlaceholder')}
                 required={true}
                 error={phoneError}
                 testID="signup-phone-input"
               />
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password *</Text>
+                <Text style={styles.label}>{t('signup.accountInfo.password')} *</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.password}
                   onChangeText={text => updateFormData('password', text)}
-                  placeholder="Enter password"
+                  placeholder={t('signup.accountInfo.passwordPlaceholder')}
                   placeholderTextColor="#9ca3af"
                   secureTextEntry
                   textContentType="newPassword"
@@ -471,12 +588,12 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Confirm Password *</Text>
+                <Text style={styles.label}>{t('signup.accountInfo.confirmPassword')} *</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.confirmPassword}
                   onChangeText={text => updateFormData('confirmPassword', text)}
-                  placeholder="Confirm password"
+                  placeholder={t('signup.accountInfo.confirmPasswordPlaceholder')}
                   placeholderTextColor="#9ca3af"
                   secureTextEntry
                   textContentType="newPassword"
@@ -489,7 +606,7 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
                 onPress={handleNext}
                 activeOpacity={0.8}
               >
-                <Text style={styles.responsiveButtonText}>Next</Text>
+                <Text style={styles.responsiveButtonText}>{t('signup.nextButton')}</Text>
                 <Icon
                   name="arrow-right"
                   size={scale(18)}
@@ -506,27 +623,27 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Icon name="briefcase" size={20} color="#6366f1" />
-              <Text style={styles.cardTitle}>Company Information</Text>
+              <Text style={styles.cardTitle}>{t('signup.companyInfo.title')}</Text>
             </View>
             <View style={styles.cardContent}>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Country *</Text>
+                <Text style={styles.label}>{t('signup.companyInfo.country')} *</Text>
                 <CustomDropdown
-                  options={countries}
+                  options={getCountries()}
                   selectedValue={formData.country}
                   onSelect={value => updateFormData('country', value)}
-                  placeholder="Select a country"
+                  placeholder={t('signup.companyInfo.countryPlaceholder')}
                   style={styles.picker}
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Company *</Text>
+                <Text style={styles.label}>{t('signup.companyInfo.company')} *</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.company}
                   onChangeText={text => updateFormData('company', text)}
-                  placeholder="Enter company name"
+                  placeholder={t('signup.companyInfo.companyPlaceholder')}
                   placeholderTextColor="#9ca3af"
                   autoCapitalize="words"
                   textContentType="organizationName"
@@ -534,23 +651,23 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>What is your role? *</Text>
+                <Text style={styles.label}>{t('signup.companyInfo.role')} *</Text>
                 <CustomDropdown
-                  options={roles}
+                  options={getRoles()}
                   selectedValue={formData.role}
                   onSelect={value => updateFormData('role', value)}
-                  placeholder="Select a role"
+                  placeholder={t('signup.companyInfo.rolePlaceholder')}
                   style={styles.picker}
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Type of Business *</Text>
+                <Text style={styles.label}>{t('signup.companyInfo.businessType')} *</Text>
                 <CustomDropdown
-                  options={businessTypes}
+                  options={getBusinessTypes()}
                   selectedValue={formData.businessType}
                   onSelect={value => updateFormData('businessType', value)}
-                  placeholder="Select a Business Type"
+                  placeholder={t('signup.companyInfo.businessTypePlaceholder')}
                   style={styles.picker}
                 />
               </View>
@@ -567,14 +684,14 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
                     color="#6b7280"
                     style={styles.buttonIcon}
                   />
-                  <Text style={styles.responsiveSecondaryButtonText}>Back</Text>
+                  <Text style={styles.responsiveSecondaryButtonText}>{t('signup.backButton')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.responsiveButton, styles.previewButton]}
                   onPress={handleNext}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.responsiveButtonText}>Preview</Text>
+                  <Text style={styles.responsiveButtonText}>{t('signup.previewButton')}</Text>
                   <Icon
                     name="arrow-right"
                     size={scale(18)}
@@ -592,19 +709,19 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Icon name="eye" size={20} color="#6366f1" />
-              <Text style={styles.cardTitle}>Preview Your Registration</Text>
+              <Text style={styles.cardTitle}>{t('signup.preview.title')}</Text>
             </View>
             <View style={styles.cardContent}>
               <View style={styles.previewContainer}>
                 {[
-                  { label: 'First Name', value: formData.firstName },
-                  { label: 'Last Name', value: formData.lastName },
-                  { label: 'Email Address', value: formData.email },
-                  { label: 'Phone', value: getCompletePhoneNumber(formData.countryCode, formData.phone) },
-                  { label: 'Country', value: formData.country },
-                  { label: 'Company', value: formData.company },
-                  { label: 'Role', value: formData.role },
-                  { label: 'Business Type', value: formData.businessType },
+                  { label: t('signup.preview.firstName'), value: formData.firstName },
+                  { label: t('signup.preview.lastName'), value: formData.lastName },
+                  { label: t('signup.preview.email'), value: formData.email },
+                  { label: t('signup.preview.phone'), value: getCompletePhoneNumber(formData.countryCode, formData.phone) },
+                  { label: t('signup.preview.country'), value: formData.country },
+                  { label: t('signup.preview.company'), value: formData.company },
+                  { label: t('signup.preview.role'), value: formData.role },
+                  { label: t('signup.preview.businessType'), value: formData.businessType },
                 ].map((item, index) => (
                   <View key={item.label} style={styles.previewItem}>
                     <Text style={styles.previewLabel}>{item.label}:</Text>
@@ -625,7 +742,7 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
                     color="#6b7280"
                     style={styles.buttonIcon}
                   />
-                  <Text style={styles.responsiveSecondaryButtonText}>Edit</Text>
+                  <Text style={styles.responsiveSecondaryButtonText}>{t('signup.editButton')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -645,12 +762,12 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
                         style={[styles.buttonIcon, styles.spinningIcon]}
                       />
                       <Text style={styles.responsiveButtonText}>
-                        {/* Submitting... */}
+                        {t('signup.submitting')}
                       </Text>
                     </>
                   ) : (
                     <>
-                      <Text style={styles.responsiveButtonText}>Submit</Text>
+                      <Text style={styles.responsiveButtonText}>{t('signup.submitButton')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -683,13 +800,23 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
         >
           {/* Header Text */}
           <View style={styles.headerTextContainer}>
-            <Text style={styles.headerText}>Create Account</Text>
+            <Text style={styles.headerText}>{t('signup.title')}</Text>
             <Text style={styles.subtitleText}>
               {userType === 'buyer'
-                ? 'Are you searching for machinery to purchase? Register below to start hunting for great deals on new and used equipment'
-                : 'Ready to sell your machinery? Register below to connect with buyers and expand your business'}
+                ? t('signup.userType.buyerDescription')
+                : t('signup.userType.sellerDescription')}
             </Text>
           </View>
+
+          {/* Navigation Info - Show if user came from listing submission */}
+          {(fromScreen || originalPendingNavigation) && (
+            <View style={styles.pendingInfo}>
+              <Icon name="info" size={16} color="#3b82f6" />
+              <Text style={styles.pendingText}>
+                {t('signup.returnAfterSignup', { defaultValue: 'You will return to your listing after signing up' })}
+              </Text>
+            </View>
+          )}
 
           <UserTypeSelector />
           <ProgressIndicator />
@@ -698,9 +825,9 @@ const SignupFlow = ({ navigation }: { navigation: any }) => {
 
           <TouchableOpacity
             style={styles.loginPrompt}
-            onPress={() => navigation.navigate('Login')}
+            onPress={handleNavigateToLogin}
           >
-            <Text style={styles.loginText}>Already have an account? Login</Text>
+            <Text style={styles.loginText}>{t('signup.loginPrompt')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -758,7 +885,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: 'white',
     fontSize: scaleFont(18),
-    fontWeight: '600',
+    fontFamily: FONTS.semiBold,
     textAlign: 'center',
   },
   headerRight: {
@@ -772,17 +899,34 @@ const styles = StyleSheet.create({
   },
   headerText: {
     fontSize: scaleFont(24),
-    fontWeight: 'bold',
+    fontFamily: FONTS.bold,
     color: '#1f2937',
     marginBottom: scale(8),
     textAlign: 'center',
   },
   subtitleText: {
     fontSize: scaleFont(14),
+    fontFamily: FONTS.regular,
     color: '#6b7280',
     textAlign: 'center',
     lineHeight: scaleHeight(20),
     paddingHorizontal: scale(16),
+  },
+  // Navigation Info
+  pendingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    padding: scale(12),
+    borderRadius: scale(8),
+    marginBottom: scale(16),
+    gap: scale(8),
+  },
+  pendingText: {
+    flex: 1,
+    fontSize: scaleFont(14),
+    color: '#1e40af',
+    fontFamily: FONTS.regular,
   },
   userTypeContainer: {
     flexDirection: 'row',
@@ -809,7 +953,7 @@ const styles = StyleSheet.create({
   },
   userTypeText: {
     fontSize: scaleFont(16),
-    fontWeight: '600',
+    fontFamily: FONTS.semiBold,
     color: '#6b7280',
   },
   activeUserTypeText: {
@@ -849,13 +993,13 @@ const styles = StyleSheet.create({
   },
   stepLabel: {
     fontSize: scaleFont(12),
-    fontWeight: '500',
+    fontFamily: FONTS.medium,
     color: '#9ca3af',
     textAlign: 'center',
   },
   activeLabel: {
     color: '#6366f1',
-    fontWeight: '600',
+    fontFamily: FONTS.semiBold,
   },
   progressLine: {
     flex: 1,
@@ -886,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: scaleFont(20),
-    fontWeight: '600',
+    fontFamily: FONTS.semiBold,
     color: '#1f2937',
     marginLeft: scale(8),
   },
@@ -898,7 +1042,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: scaleFont(15),
-    fontWeight: '600',
+    fontFamily: FONTS.semiBold,
     color: '#374151',
     marginBottom: scale(8),
   },
@@ -909,6 +1053,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
     paddingVertical: scale(14),
     fontSize: scaleFont(16),
+    fontFamily: FONTS.regular,
     backgroundColor: 'white',
     color: '#1f2937',
     minHeight: scaleHeight(52),
@@ -938,12 +1083,13 @@ const styles = StyleSheet.create({
   },
   previewLabel: {
     fontSize: scaleFont(14),
-    fontWeight: '500',
+    fontFamily: FONTS.medium,
     color: '#6b7280',
     flex: 1,
   },
   previewValue: {
     fontSize: scaleFont(14),
+    fontFamily: FONTS.regular,
     color: '#1f2937',
     textAlign: 'right',
     flex: 1,
@@ -955,6 +1101,7 @@ const styles = StyleSheet.create({
   loginText: {
     color: '#6366f1',
     fontSize: scaleFont(14),
+    fontFamily: FONTS.medium,
     textDecorationLine: 'underline',
   },
   // Enhanced Responsive Button Styles
@@ -1028,13 +1175,13 @@ const styles = StyleSheet.create({
   responsiveButtonText: {
     color: 'white',
     fontSize: scaleFont(17),
-    fontWeight: '700',
+    fontFamily: FONTS.bold,
     letterSpacing: 0.5,
   },
   responsiveSecondaryButtonText: {
     color: '#64748b',
     fontSize: scaleFont(17),
-    fontWeight: '600',
+    fontFamily: FONTS.semiBold,
     letterSpacing: 0.5,
   },
   disabledButton: {

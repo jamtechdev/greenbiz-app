@@ -26,7 +26,9 @@ const DocumentsUploadComponent = ({
   onFilesSelected, 
   uploadedFiles = [], 
   maxFiles = 10,
-  style 
+  style,
+  is_editing
+
 }) => {
   const [isUploading, setIsUploading] = useState(false);
 

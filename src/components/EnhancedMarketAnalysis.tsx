@@ -1,19 +1,71 @@
+// Enhanced Market Analysis Component with proper currency handling
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
-// Simple helper function
-const calculateMarketStats = (priceData) => {
+// Currency conversion helper (you'll need to implement this with real exchange rates)
+const convertCurrency = (amount, fromCurrency, toCurrency) => {
+  // This is a placeholder - implement with real exchange rate API
+  const exchangeRates = {
+    USD: 1,
+    CNY: 7.2,
+    TWD: 31.5,
+    THB: 36,
+    VND: 24000,
+    HKD: 7.8,
+    EUR: 0.92,
+    CAD: 1.36,
+    GBP: 0.79,
+    AUD: 1.53,
+    PKR: 278,
+    AED: 3.67,
+  };
+  
+  const baseAmount = amount / (exchangeRates[fromCurrency] || 1);
+  return baseAmount * (exchangeRates[toCurrency] || 1);
+};
+
+// Extract currency symbol from currency string
+const getCurrencySymbol = (currency) => {
+  const currencyMap = {
+    'USD': '$',
+    'CNY': '¥',
+    'TWD': 'NT$',
+    'THB': '฿',
+    'VND': '₫',
+    'HKD': 'HK$',
+    'EUR': '€',
+    'CAD': 'C$',
+    'GBP': '£',
+    'AUD': 'A$',
+    'PKR': 'Rs',
+    'AED': 'د.إ',
+  };
+  
+  // If currency is in format "USD ($)", extract the code
+  const currencyCode = currency.split(' ')[0];
+  return currencyMap[currencyCode] || currencyCode;
+};
+
+// Simple helper function with currency handling
+const calculateMarketStats = (priceData, displayCurrency = 'USD', convertPrices = false) => {
   if (!priceData || Object.keys(priceData).length === 0) {
     return null;
   }
 
   const prices = Object.values(priceData)
-    .map(price => parseFloat(price))
+    .map(price => {
+      let numPrice = parseFloat(price);
+      if (convertPrices && displayCurrency !== 'USD') {
+        numPrice = convertCurrency(numPrice, 'USD', displayCurrency);
+      }
+      return numPrice;
+    })
     .filter(price => !isNaN(price) && price > 0);
   
   if (prices.length === 0) {
@@ -35,12 +87,23 @@ const calculateMarketStats = (priceData) => {
     average: avgPrice,
     median: medianPrice,
     count: prices.length,
+    isConverted: convertPrices && displayCurrency !== 'USD',
+    originalCurrency: 'USD',
+    displayCurrency: displayCurrency,
   };
 };
 
-// Simple Market Analysis Component
-const SimpleMarketAnalysis = ({ priceData, currency }) => {
-  const marketStats = calculateMarketStats(priceData);
+// Enhanced Market Analysis Component
+const EnhancedMarketAnalysis = ({ 
+  priceData, 
+  currency,
+  userCurrency, 
+  convertPrices = false, // Option to convert or keep in USD
+  showCurrencyToggle = false // Option to show currency toggle
+}) => {
+  const [displayInUserCurrency, setDisplayInUserCurrency] = React.useState(false);
+  const displayCurrency = (convertPrices && displayInUserCurrency) ? userCurrency : 'USD';
+  const marketStats = calculateMarketStats(priceData, displayCurrency, convertPrices && displayInUserCurrency);
 
   if (!marketStats) {
     return (
@@ -66,12 +129,13 @@ const SimpleMarketAnalysis = ({ priceData, currency }) => {
   }
 
   const formatPrice = (price) => {
-    return `${currency} ${Math.round(price).toLocaleString()}`;
+    const currencySymbol = getCurrencySymbol(displayCurrency);
+    return `${currencySymbol} ${Math.round(price).toLocaleString()}`;
   };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header with Currency Info */}
       <View style={styles.header}>
         <Icon name="trending-up" size={18} color="#10b981" />
         <Text style={styles.title}>Market Analysis</Text>
@@ -79,6 +143,35 @@ const SimpleMarketAnalysis = ({ priceData, currency }) => {
           {marketStats.count} source{marketStats.count !== 1 ? 's' : ''}
         </Text>
       </View>
+
+      {/* Currency Disclaimer */}
+      <View style={styles.currencyDisclaimer}>
+        <Icon name="info" size={14} color="#6b7280" />
+        <Text style={styles.disclaimerText}>
+          Market data sourced in USD
+          {displayInUserCurrency && userCurrency !== 'USD' 
+            ? ` • Converted to ${userCurrency} (rates may vary)`
+            : ''
+          }
+        </Text>
+      </View>
+
+      {/* Currency Toggle (Optional) */}
+      {showCurrencyToggle && userCurrency !== 'USD' && (
+        <TouchableOpacity 
+          style={styles.currencyToggle}
+          onPress={() => setDisplayInUserCurrency(!displayInUserCurrency)}
+        >
+          <Icon 
+            name="refresh-cw" 
+            size={14} 
+            color="#6366f1" 
+          />
+          <Text style={styles.currencyToggleText}>
+            Show in {displayInUserCurrency ? 'USD' : userCurrency}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* Stats Grid */}
       <View style={styles.statsGrid}>
@@ -126,11 +219,20 @@ const SimpleMarketAnalysis = ({ priceData, currency }) => {
           </Text>
         </View>
       </View>
+
+      {/* Conversion Warning */}
+      {displayInUserCurrency && userCurrency !== 'USD' && (
+        <View style={styles.conversionWarning}>
+          <Icon name="alert-triangle" size={14} color="#f59e0b" />
+          <Text style={styles.warningText}>
+            Exchange rates are approximate and may not reflect actual market conditions
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
 
-// Simple Clean Styles
 const styles = StyleSheet.create({
   container: {
     marginTop: 16,
@@ -150,7 +252,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     gap: 8,
   },
 
@@ -166,6 +268,48 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     fontFamily: 'Poppins-Regular',
+  },
+
+  // Currency Disclaimer
+  currencyDisclaimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f9fafb',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+
+  disclaimerText: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontFamily: 'Poppins-Regular',
+    flex: 1,
+  },
+
+  // Currency Toggle
+  currencyToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#6366f1',
+    alignSelf: 'flex-start',
+  },
+
+  currencyToggleText: {
+    fontSize: 12,
+    color: '#6366f1',
+    fontFamily: 'Poppins-Medium',
   },
 
   // Stats Grid
@@ -205,6 +349,27 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Bold',
   },
 
+  // Conversion Warning
+  conversionWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fef3c7',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+
+  warningText: {
+    fontSize: 11,
+    color: '#92400e',
+    fontFamily: 'Poppins-Regular',
+    flex: 1,
+  },
+
   // No Data State
   noData: {
     paddingVertical: 20,
@@ -242,4 +407,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SimpleMarketAnalysis;
+export default EnhancedMarketAnalysis;

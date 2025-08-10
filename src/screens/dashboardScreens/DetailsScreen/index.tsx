@@ -64,7 +64,7 @@ const CONDITIONS = [
   'Used, Needs Minor Repair',
 ];
 
-const OPERATION_STATUS = ['Running', 'Idle', 'Down'];
+const OPERATION_STATUS = ['Running', 'Idle', 'Down' ,"Functional"];
 
 const CURRENCIES = [
   'USD ($)',
@@ -468,7 +468,7 @@ export default function DetailsScreen({ route, navigation }) {
         formData.append('category', fields.parent_category.value);
       }
       if (fields.dimensions?.value) {
-        formData.append('dimensions', fields.dimensions.value);
+        formData.append('dimension', fields.dimensions.value);
       }
       if (fields.co2_emission?.value) {
         formData.append('co2_emission', fields.co2_emission.value);

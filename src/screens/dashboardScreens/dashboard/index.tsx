@@ -16,12 +16,18 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import BottomNav from '../../../components/BottomNavbar';
 import ImagePicker from 'react-native-image-crop-picker';
 import CameraOverlay from '../../../components/CameraOverlay';
 import { useAppContext } from '../../../_customContext/AppProvider';
 import { clearAnalysis } from '../../../store/slices/analysisSlice';
+import {
+  selectCurrentLanguage,
+  selectIsLanguageInitialized,
+} from '../../../store/slices/languageSlice';
 import { apiService } from '../../../api/axiosConfig';
 import {
   scale,
@@ -29,12 +35,16 @@ import {
   scaleHeight,
   scaleWidth,
 } from '../../../utils/resposive';
+import LanguageSelector from '../../../components/LanguageSelector';
 
 const { width } = Dimensions.get('window');
 
 export default function DashboardScreen({ navigation }) {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const { showOverlay, setShowOverlay } = useAppContext();
+  
+  // All useState hooks declared at the top level
   const [selectedImages, setSelectedImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState('');
@@ -43,12 +53,14 @@ export default function DashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [isUnauthorized, setIsUnauthorized] = useState(false);
-
-  // Carousel specific state
-  const carouselRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [hasAutoOpenedOverlay, setHasAutoOpenedOverlay] = useState(false);
+  const [authenticationStatus, setAuthenticationStatus] = useState('checking'); // 'checking', 'authenticated', 'unauthenticated'
 
-  // Redux selectors
+  // All useRef hooks
+  const carouselRef = useRef(null);
+
+  // All useSelector hooks
   const {
     loading,
     error: analysisError,
@@ -57,33 +69,60 @@ export default function DashboardScreen({ navigation }) {
   const { user, isAuthenticated, token } = useSelector(
     state => state.auth || {},
   );
+  const currentLanguage = useSelector(selectCurrentLanguage);
+  const isLanguageInitialized = useSelector(selectIsLanguageInitialized);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (isAuthenticated) {
-        console.log('🔐 User is authenticated, loading listings...');
-        loadListings();
+  // FIXED: Add authentication check function
+  const checkAuthenticationStatus = useCallback(async () => {
+    try {
+      console.log('🔍 Checking authentication status...');
+      
+      // Check AsyncStorage for token
+      const storedToken = await AsyncStorage.getItem('userToken');
+      const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
+      
+      console.log('📦 Stored token exists:', !!storedToken);
+      console.log('📦 IsLoggedIn flag:', isLoggedIn);
+      console.log('🔐 Redux isAuthenticated:', isAuthenticated);
+      console.log('🔐 Redux token exists:', !!token);
+      
+      // User is authenticated if ANY of these conditions are true:
+      const userIsAuthenticated = !!(
+        storedToken || 
+        (isLoggedIn === 'true') || 
+        isAuthenticated || 
+        token
+      );
+      
+      console.log('✅ Final authentication status:', userIsAuthenticated);
+      
+      if (userIsAuthenticated) {
+        setAuthenticationStatus('authenticated');
+        setIsUnauthorized(false);
+        return true;
       } else {
-        console.log('❌ User not authenticated, skipping listings load');
-        setListings([]);
+        setAuthenticationStatus('unauthenticated');
         setIsUnauthorized(true);
+        return false;
       }
+    } catch (error) {
+      console.error('❌ Error checking authentication:', error);
+      setAuthenticationStatus('unauthenticated');
+      setIsUnauthorized(true);
+      return false;
+    }
+  }, [isAuthenticated, token]);
 
-      // Open overlay immediately when app opens (first time)
-      if (!showOverlay) {
-        setShowOverlay(true);
-      }
-    }, [isAuthenticated, token]),
-  );
-
-  const loadListings = async () => {
+  // All useCallback hooks
+  const loadListings = useCallback(async () => {
     try {
       setIsLoadingListings(true);
       setError(null);
-      setIsUnauthorized(false);
 
+      console.log('📋 Starting to load listings...');
+      
       const response = await apiService.getAllListing();
-      console.log('📋 Listings loaded:', response.data);
+      console.log('📋 Listings API response:', response.data);
 
       // Handle the actual API response structure
       if (
@@ -92,9 +131,10 @@ export default function DashboardScreen({ navigation }) {
         Array.isArray(response.data.data)
       ) {
         setListings(response.data.data);
-        console.log('✅ Listings set:', response.data.data);
+        console.log('✅ Listings set from success response:', response.data.data.length, 'items');
       } else if (response.data && Array.isArray(response.data)) {
         setListings(response.data);
+        console.log('✅ Listings set from direct array:', response.data.length, 'items');
       } else {
         console.log('⚠️ Unexpected listings format:', response.data);
         setListings([]);
@@ -104,8 +144,15 @@ export default function DashboardScreen({ navigation }) {
 
       // Handle different error types
       if (error.response?.status === 401) {
+        console.log('🚫 401 Unauthorized - token may be expired');
         setIsUnauthorized(true);
+        setAuthenticationStatus('unauthenticated');
         setError('Authentication expired. Please login again.');
+        
+        // Clear stored auth data
+        await AsyncStorage.removeItem('userToken');
+        await AsyncStorage.removeItem('isLoggedIn');
+        await AsyncStorage.removeItem('userData');
       } else if (error.response?.status === 403) {
         setError('Access denied. Please check your permissions.');
       } else if (error.response?.status === 404) {
@@ -125,16 +172,219 @@ export default function DashboardScreen({ navigation }) {
     } finally {
       setIsLoadingListings(false);
     }
-  };
+  }, []);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    if (isAuthenticated) {
+    
+    // Re-check authentication first
+    const isAuth = await checkAuthenticationStatus();
+    
+    if (isAuth) {
       await loadListings();
+    } else {
+      console.log('❌ User not authenticated during refresh, skipping listings load');
     }
+    
     setRefreshing(false);
-  };
+  }, [checkAuthenticationStatus, loadListings]);
 
+  const handleGalleryPick = useCallback(() => {
+    return new Promise((resolve, reject) => {
+      ImagePicker.openPicker({
+        width: 800,
+        height: 600,
+        cropping: false,
+        mediaType: 'photo',
+        compressImageQuality: 0.8,
+      })
+        .then(image => {
+          console.log('Gallery image:', image);
+          resolve({ uri: image.path });
+        })
+        .catch(error => {
+          console.log('Gallery picker error:', error);
+          if (error.code !== 'E_PICKER_CANCELLED') {
+            Alert.alert('Error', 'Failed to pick image from gallery');
+          }
+          reject(error);
+        });
+    });
+  }, []);
+
+  const handleCameraPick = useCallback(() => {
+    return new Promise((resolve, reject) => {
+      ImagePicker.openCamera({
+        width: 800,
+        height: 600,
+        cropping: false,
+        mediaType: 'photo',
+        compressImageQuality: 0.8,
+      })
+        .then(image => {
+          console.log('Camera image:', image);
+          resolve({ uri: image.path });
+        })
+        .catch(error => {
+          console.log('Camera picker error:', error);
+          if (error.code !== 'E_PICKER_CANCELLED') {
+            Alert.alert('Error', 'Failed to take photo');
+          }
+          reject(error);
+        });
+    });
+  }, []);
+
+  const analyzeImagesManually = useCallback(async (imagePaths) => {
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress(t('dashboard.processingImages'));
+
+      console.log('🗑️ Clearing previous analysis before new analysis...');
+      dispatch(clearAnalysis());
+
+      console.log('🚀 Starting fresh analysis for:', imagePaths);
+
+      console.log('🔄 Using FormData with files method...');
+
+      const formData = new FormData();
+      imagePaths.forEach((imagePath, index) => {
+        formData.append('images[]', {
+          uri: imagePath,
+          type: 'image/jpeg',
+          name: `image_${index}.jpg`,
+        });
+      });
+
+      const response = await fetch(
+        'https://greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          body: formData,
+        },
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setIsAnalyzing(false);
+        setShowOverlay(false);
+
+        navigation.navigate('Details', {
+          images: imagePaths,
+          imageCount: imagePaths.length,
+          analysisData: data,
+          timestamp: Date.now(),
+        });
+        
+        // Reload listings if authenticated
+        if (authenticationStatus === 'authenticated') {
+          loadListings();
+        }
+      } else {
+        throw new Error(data.message || 'Analysis failed');
+      }
+    } catch (error) {
+      console.error('🚨 Analysis failed:', error);
+      setIsAnalyzing(false);
+      Alert.alert(
+        t('dashboard.analysisFailed'),
+        error.message || t('dashboard.analysisFailedMessage'),
+        [
+          {
+            text: t('dashboard.retry'),
+            onPress: () => analyzeImagesManually(imagePaths),
+          },
+          {
+            text: t('cancel'),
+            style: 'cancel',
+          },
+        ],
+      );
+    }
+  }, [t, dispatch, setShowOverlay, navigation, authenticationStatus, loadListings]);
+
+  const handleImagesComplete = useCallback(async (images) => {
+    console.log('📸 New images selected:', images);
+    setSelectedImages(images);
+    await analyzeImagesManually(images);
+  }, [analyzeImagesManually]);
+
+  const handleScanMachinePress = useCallback(() => {
+    console.log('🗑️ Clearing previous analysis data...');
+    dispatch(clearAnalysis());
+    setSelectedImages([]);
+    setIsAnalyzing(false);
+    setAnalysisProgress('');
+    setShowOverlay(true);
+  }, [dispatch, setShowOverlay]);
+
+  const handleCloseOverlay = useCallback(() => {
+    console.log('🔴 User manually closed overlay');
+    if (isAnalyzing) {
+      Alert.alert(
+        t('dashboard.analysisInProgress'),
+        t('dashboard.cancelAnalysis'),
+        [
+          { text: t('dashboard.continueAnalysis'), style: 'cancel' },
+          {
+            text: t('cancel'),
+            style: 'destructive',
+            onPress: () => {
+              setIsAnalyzing(false);
+              setShowOverlay(false);
+              setSelectedImages([]);
+              dispatch(clearAnalysis());
+            },
+          },
+        ],
+      );
+    } else {
+      setShowOverlay(false);
+      setSelectedImages([]);
+      dispatch(clearAnalysis());
+    }
+  }, [isAnalyzing, t, setShowOverlay, dispatch]);
+
+  const handleScrollEnd = useCallback((event) => {
+    const contentOffset = event.nativeEvent.contentOffset.x;
+    const cardWidth = scaleWidth(280) + scaleWidth(16); // Card width + margin
+    const pageNum = Math.floor(contentOffset / cardWidth);
+
+    if (pageNum >= 0 && pageNum < listings.length) {
+      setCurrentIndex(pageNum);
+    }
+  }, [listings.length]);
+
+  // FIXED: Enhanced useFocusEffect hook with proper authentication handling
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔍 Dashboard focused - checking authentication and loading data...');
+      
+      // Check authentication status first
+      checkAuthenticationStatus().then((isAuth) => {
+        if (isAuth) {
+          console.log('🔐 User is authenticated, loading listings...');
+          loadListings();
+        } else {
+          console.log('❌ User not authenticated, clearing listings');
+          setListings([]);
+        }
+      });
+
+      // Only auto-open overlay once when the app first loads
+      if (!hasAutoOpenedOverlay) {
+        console.log('🚀 Auto-opening overlay for first time');
+        setShowOverlay(true);
+        setHasAutoOpenedOverlay(true);
+      }
+    }, [checkAuthenticationStatus, loadListings, hasAutoOpenedOverlay]),
+  );
+
+  // All useEffect hooks
   // Auto-scroll effect for carousel
   useEffect(() => {
     if (listings.length > 1) {
@@ -153,15 +403,91 @@ export default function DashboardScreen({ navigation }) {
     }
   }, [currentIndex, listings.length]);
 
-  // Handle manual scroll end
-  const handleScrollEnd = (event) => {
-    const contentOffset = event.nativeEvent.contentOffset.x;
-    const cardWidth = scaleWidth(280) + scaleWidth(16); // Card width + margin
-    const pageNum = Math.floor(contentOffset / cardWidth);
-    
-    if (pageNum >= 0 && pageNum < listings.length) {
-      setCurrentIndex(pageNum);
+  // Reset when overlay closes
+  useEffect(() => {
+    if (!showOverlay) {
+      setSelectedImages([]);
+      setIsAnalyzing(false);
+      setAnalysisProgress('');
     }
+  }, [showOverlay]);
+
+  // Clear analysis data when component mounts
+  useEffect(() => {
+    console.log('🔄 Dashboard mounted, clearing any existing analysis data');
+    dispatch(clearAnalysis());
+  }, [dispatch]);
+
+  // Helper functions (these don't use hooks, so they can be anywhere)
+  const getStatusBadgeStyle = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'published':
+      case 'publish':
+        return { backgroundColor: '#10b981' };
+      case 'pending':
+        return { backgroundColor: '#f59e0b' };
+      case 'sold':
+        return { backgroundColor: '#8b5cf6' };
+      case 'draft':
+        return { backgroundColor: '#6b7280' };
+      default:
+        return { backgroundColor: '#6b7280' };
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'published':
+      case 'publish':
+        return t('dashboard.live');
+      case 'pending':
+        return t('pending');
+      case 'sold':
+        return t('dashboard.sold');
+      case 'draft':
+        return t('dashboard.draft');
+      default:
+        return t('dashboard.draft');
+    }
+  };
+
+  const formatPrice = (price) => {
+    if (!price) return '0';
+    return parseInt(price).toLocaleString();
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return t('dashboard.recently');
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) return t('dashboard.yesterday');
+    if (diffDays < 7) return t('dashboard.daysAgo', { days: diffDays });
+    if (diffDays < 30)
+      return t('dashboard.weeksAgo', { weeks: Math.ceil(diffDays / 7) });
+
+    // Format date according to language
+    if (currentLanguage === 'zh-TW') {
+      return date.toLocaleDateString('zh-TW', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+    }
+    return date.toLocaleDateString('en-US');
+  };
+
+  const getStatsFromListings = () => {
+    const listed = listings.length;
+    const published = listings.filter(
+      item => item.status === 'publish' || item.status === 'published',
+    ).length;
+    const pending = listings.filter(item => item.status === 'pending').length;
+    const sold = listings.filter(item => item.status === 'sold').length;
+
+    return { listed, published, pending, sold };
   };
 
   // Carousel item renderer
@@ -186,7 +512,7 @@ export default function DashboardScreen({ navigation }) {
         ) : (
           <View style={styles.cardImagePlaceholder}>
             <Icon name="camera" size={32} color="#94a3b8" />
-            <Text style={styles.placeholderText}>No Image</Text>
+            <Text style={styles.placeholderText}>{t('dashboard.noImage')}</Text>
           </View>
         )}
 
@@ -224,7 +550,7 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.cardPrice}>
               ${formatPrice(item.price) || '0'}
             </Text>
-            <Text style={styles.cardPriceLabel}>USD</Text>
+            <Text style={styles.cardPriceLabel}>{t('dashboard.usd')}</Text>
           </View>
 
           <View style={styles.cardActions}>
@@ -248,7 +574,7 @@ export default function DashboardScreen({ navigation }) {
   // Pagination dots component
   const CarouselPagination = ({ data, currentIndex }) => {
     if (!data || data.length <= 1) return null;
-    
+
     return (
       <View style={styles.paginationContainer}>
         {data.map((_, index) => (
@@ -264,283 +590,60 @@ export default function DashboardScreen({ navigation }) {
     );
   };
 
-  const handleGalleryPick = () => {
-    return new Promise((resolve, reject) => {
-      ImagePicker.openPicker({
-        width: 800,
-        height: 600,
-        cropping: false,
-        mediaType: 'photo',
-        compressImageQuality: 0.8,
-      })
-        .then(image => {
-          console.log('Gallery image:', image);
-          resolve({ uri: image.path });
-        })
-        .catch(error => {
-          console.log('Gallery picker error:', error);
-          if (error.code !== 'E_PICKER_CANCELLED') {
-            Alert.alert('Error', 'Failed to pick image from gallery');
-          }
-          reject(error);
-        });
-    });
-  };
-
-  const handleCameraPick = () => {
-    return new Promise((resolve, reject) => {
-      ImagePicker.openCamera({
-        width: 800,
-        height: 600,
-        cropping: false,
-        mediaType: 'photo',
-        compressImageQuality: 0.8,
-      })
-        .then(image => {
-          console.log('Camera image:', image);
-          resolve({ uri: image.path });
-        })
-        .catch(error => {
-          console.log('Camera picker error:', error);
-          if (error.code !== 'E_PICKER_CANCELLED') {
-            Alert.alert('Error', 'Failed to take photo');
-          }
-          reject(error);
-        });
-    });
-  };
-
-  // Clear previous analysis when overlay opens
-  const handleScanMachinePress = () => {
-    console.log('🗑️ Clearing previous analysis data...');
-    dispatch(clearAnalysis());
-    setSelectedImages([]);
-    setIsAnalyzing(false);
-    setAnalysisProgress('');
-    setShowOverlay(true);
-  };
-
-  const analyzeImagesManually = async imagePaths => {
-    try {
-      setIsAnalyzing(true);
-      setAnalysisProgress('Starting new analysis...');
-
-      console.log('🗑️ Clearing previous analysis before new analysis...');
-      dispatch(clearAnalysis());
-
-      console.log('🚀 Starting fresh analysis for:', imagePaths);
-
-      setAnalysisProgress('Sending images to AI analysis...');
-
-      console.log('🔄 Using FormData with files method...');
-
-      const formData = new FormData();
-      imagePaths.forEach((imagePath, index) => {
-        formData.append('images[]', {
-          uri: imagePath,
-          type: 'image/jpeg',
-          name: `image_${index}.jpg`,
-        });
-      });
-
-      const response = await fetch(
-        'https://greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          body: formData,
-        },
-      );
-
-      const data = await response.json();
-      console.log('📋 API Response:', response.status, data);
-
-      if (response.ok) {
-        console.log('✅ Analysis successful! New data:', data);
-        setIsAnalyzing(false);
-        setShowOverlay(false);
-
-        navigation.navigate('Details', {
-          images: imagePaths,
-          imageCount: imagePaths.length,
-          analysisData: data,
-          timestamp: Date.now(),
-        });
-        if (isAuthenticated) {
-          loadListings();
-        }
-      } else {
-        throw new Error(data.message || 'Analysis failed');
-      }
-    } catch (error) {
-      console.error('🚨 Analysis failed:', error);
-      setIsAnalyzing(false);
-      Alert.alert(
-        'Analysis Failed',
-        error.message || 'Failed to analyze images. Please try again.',
-        [
-          {
-            text: 'Retry',
-            onPress: () => analyzeImagesManually(imagePaths),
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-        ],
-      );
-    }
-  };
-
-  const handleImagesComplete = async images => {
-    console.log('📸 New images selected:', images);
-    setSelectedImages(images);
-    await analyzeImagesManually(images);
-  };
-
-  const handleCloseOverlay = () => {
-    if (isAnalyzing) {
-      Alert.alert(
-        'Analysis in Progress',
-        'Images are being analyzed. Are you sure you want to cancel?',
-        [
-          { text: 'Continue Analysis', style: 'cancel' },
-          {
-            text: 'Cancel',
-            style: 'destructive',
-            onPress: () => {
-              setIsAnalyzing(false);
-              setShowOverlay(false);
-              setSelectedImages([]);
-              dispatch(clearAnalysis());
-            },
-          },
-        ],
-      );
-    } else {
-      setShowOverlay(false);
-      setSelectedImages([]);
-      dispatch(clearAnalysis());
-    }
-  };
-
-  // Reset when overlay closes
-  useEffect(() => {
-    if (!showOverlay) {
-      setSelectedImages([]);
-      setIsAnalyzing(false);
-      setAnalysisProgress('');
-    }
-  }, [showOverlay]);
-
-  // Clear analysis data when component mounts
-  useEffect(() => {
-    console.log('🔄 Dashboard mounted, clearing any existing analysis data');
-    dispatch(clearAnalysis());
-  }, [dispatch]);
-
-  // Helper functions
-  const getStatusBadgeStyle = status => {
-    switch (status?.toLowerCase()) {
-      case 'published':
-      case 'publish':
-        return { backgroundColor: '#10b981' };
-      case 'pending':
-        return { backgroundColor: '#f59e0b' };
-      case 'sold':
-        return { backgroundColor: '#8b5cf6' };
-      case 'draft':
-        return { backgroundColor: '#6b7280' };
-      default:
-        return { backgroundColor: '#6b7280' };
-    }
-  };
-
-  const getStatusText = status => {
-    switch (status?.toLowerCase()) {
-      case 'published':
-      case 'publish':
-        return 'Live';
-      case 'pending':
-        return 'Pending';
-      case 'sold':
-        return 'Sold';
-      case 'draft':
-        return 'Draft';
-      default:
-        return 'Draft';
-    }
-  };
-
-  const formatPrice = price => {
-    if (!price) return '0';
-    return parseInt(price).toLocaleString();
-  };
-
-  const formatDate = dateString => {
-    if (!dateString) return 'Recently';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.ceil(diffDays / 7)} weeks ago`;
-    return date.toLocaleDateString();
-  };
-
-  const renderEmptyListings = () => (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconContainer}>
-        <Icon name="inbox" size={32} color="#6366f1" />
+  // FIXED: Enhanced empty state with better authentication logic
+  const renderEmptyListings = () => {
+    const isUserUnauthorized = authenticationStatus === 'unauthenticated' || isUnauthorized;
+    
+    return (
+      <View style={styles.emptyState}>
+        <View style={styles.emptyIconContainer}>
+          <Icon name={isUserUnauthorized ? "lock" : "inbox"} size={32} color="#6366f1" />
+        </View>
+        <Text style={styles.emptyTitle}>
+          {isUserUnauthorized
+            ? t('dashboard.authRequired')
+            : error
+            ? t('dashboard.noDataAvailable')
+            : t('dashboard.noMachinesScanned')}
+        </Text>
+        <Text style={styles.emptySubtitle}>
+          {isUserUnauthorized
+            ? t('dashboard.loginToView')
+            : error
+            ? t('dashboard.unableToLoad')
+            : t('dashboard.startScanning')}
+        </Text>
+        {!error && (
+          <TouchableOpacity
+            style={styles.emptyButton}
+            onPress={
+              isUserUnauthorized
+                ? () => navigation.navigate('Login')
+                : handleScanMachinePress
+            }
+          >
+            <Icon
+              name={isUserUnauthorized ? 'log-in' : 'plus'}
+              size={16}
+              color="#fff"
+            />
+            <Text style={styles.emptyButtonText}>
+              {isUserUnauthorized ? t('logins') : t('dashboard.scanNow')}
+            </Text>
+          </TouchableOpacity>
+        )}
+        {error && (
+          <TouchableOpacity
+            style={[styles.emptyButton, { backgroundColor: '#ef4444' }]}
+            onPress={onRefresh}
+          >
+            <Icon name="refresh-cw" size={16} color="#fff" />
+            <Text style={styles.emptyButtonText}>{t('dashboard.tryAgain')}</Text>
+          </TouchableOpacity>
+        )}
       </View>
-      <Text style={styles.emptyTitle}>
-        {isUnauthorized
-          ? 'Authentication Required'
-          : error
-          ? 'No Data Available'
-          : 'No Machines Scanned Yet'}
-      </Text>
-      <Text style={styles.emptySubtitle}>
-        {isUnauthorized
-          ? 'Please login to view your machines'
-          : error
-          ? 'Unable to load data. Please try again.'
-          : 'Start by scanning your first machine to see it here'}
-      </Text>
-      {!error && (
-        <TouchableOpacity
-          style={styles.emptyButton}
-          onPress={
-            isUnauthorized
-              ? () => navigation.navigate('Login')
-              : handleScanMachinePress
-          }
-        >
-          <Icon
-            name={isUnauthorized ? 'log-in' : 'plus'}
-            size={16}
-            color="#fff"
-          />
-          <Text style={styles.emptyButtonText}>
-            {isUnauthorized ? 'Login' : 'Scan Now'}
-          </Text>
-        </TouchableOpacity>
-      )}
-      {error && (
-        <TouchableOpacity
-          style={[styles.emptyButton, { backgroundColor: '#ef4444' }]}
-          onPress={onRefresh}
-        >
-          <Icon name="refresh-cw" size={16} color="#fff" />
-          <Text style={styles.emptyButtonText}>Try Again</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+    );
+  };
 
   const renderAnalysisModal = () => (
     <Modal visible={isAnalyzing} transparent={true} animationType="fade">
@@ -550,7 +653,7 @@ export default function DashboardScreen({ navigation }) {
             <Icon name="cpu" size={28} color="#6366f1" />
           </View>
 
-          <Text style={styles.analysisTitle}>AI Analysis</Text>
+          <Text style={styles.analysisTitle}>{t('dashboard.aiAnalysis')}</Text>
 
           <ActivityIndicator
             size="large"
@@ -559,29 +662,48 @@ export default function DashboardScreen({ navigation }) {
           />
 
           <Text style={styles.analysisProgress}>
-            {analysisProgress || 'Processing images...'}
+            {analysisProgress || t('dashboard.processingImages')}
           </Text>
 
           <Text style={styles.analysisSubText}>
-            Please wait while we analyze your machine
+            {t('dashboard.pleaseWait')}
           </Text>
         </View>
       </View>
     </Modal>
   );
 
-  const getStatsFromListings = () => {
-    const listed = listings.length;
-    const published = listings.filter(
-      item => item.status === 'publish' || item.status === 'published',
-    ).length;
-    const pending = listings.filter(item => item.status === 'pending').length;
-    const sold = listings.filter(item => item.status === 'sold').length;
-
-    return { listed, published, pending, sold };
-  };
-
   const stats = getStatsFromListings();
+
+  // Early return for loading state - this is OK because all hooks are already called above
+  if (!isLanguageInitialized) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: 'center', alignItems: 'center' },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={styles.loadingText}>Initializing...</Text>
+      </View>
+    );
+  }
+
+  // Show loading while checking authentication
+  if (authenticationStatus === 'checking') {
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: 'center', alignItems: 'center' },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={styles.loadingText}>Checking authentication...</Text>
+      </View>
+    );
+  }
 
   return (
     <>
@@ -600,27 +722,43 @@ export default function DashboardScreen({ navigation }) {
                       <Icon name="zap" size={20} color="#fff" />
                     </View>
                     <View>
-                      <Text style={styles.appName}>GreenBidz</Text>
-                      <Text style={styles.tagline}>AI Machine Scanner</Text>
+                      <Text style={styles.appName}>
+                        {t('dashboard.appName')}
+                      </Text>
+                      <Text style={styles.tagline}>
+                        {t('dashboard.tagline')}
+                      </Text>
                     </View>
                   </View>
-                  <TouchableOpacity
-                    style={styles.notificationButton}
-                    onPress={onRefresh}
-                    disabled={refreshing}
-                  >
-                    <Icon
-                      name={refreshing ? 'loader' : 'refresh-cw'}
-                      size={18}
-                      color="#fff"
+                  <View style={styles.headerRight}>
+                    {/* Language Selector Component */}
+                    <LanguageSelector
+                      size="small"
+                      buttonStyle={styles.dashboardLanguageButton}
                     />
-                    <View style={styles.notificationDot} />
-                  </TouchableOpacity>
+
+                    {/* Refresh Button */}
+                    <TouchableOpacity
+                      style={styles.notificationButton}
+                      onPress={onRefresh}
+                      disabled={refreshing}
+                    >
+                      <Icon
+                        name={refreshing ? 'loader' : 'refresh-cw'}
+                        size={18}
+                        color="#fff"
+                      />
+                      <View style={styles.notificationDot} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={styles.headerBottom}>
                   <Text style={styles.welcomeText}>
-                    Welcome back! Ready to scan your machines?
+                    {authenticationStatus === 'authenticated' 
+                      ? t('dashboard.welcomeBack')
+                      : t('dashboard.welcome')
+                    }
                   </Text>
                 </View>
               </View>
@@ -650,9 +788,11 @@ export default function DashboardScreen({ navigation }) {
                 <View style={styles.scanButtonIcon}>
                   <Icon name="camera" size={24} color="#fff" />
                 </View>
-                <Text style={styles.scanButtonTitle}>Scan Machine</Text>
+                <Text style={styles.scanButtonTitle}>
+                  {t('dashboard.scanMachine')}
+                </Text>
                 <Text style={styles.scanButtonDesc}>
-                  Take photos for AI analysis
+                  {t('dashboard.scanDescription')}
                 </Text>
               </TouchableOpacity>
 
@@ -663,7 +803,7 @@ export default function DashboardScreen({ navigation }) {
                   onPress={() => navigation.navigate('MyList')}
                 >
                   <Icon name="list" size={20} color="#6366f1" />
-                  <Text style={styles.actionButtonText}>My Listings</Text>
+                  <Text style={styles.actionButtonText}>{t('myListings')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -672,49 +812,64 @@ export default function DashboardScreen({ navigation }) {
                   onPress={() => navigation.navigate('MyProfile')}
                 >
                   <Icon name="settings" size={20} color="#6366f1" />
-                  <Text style={styles.actionButtonText}>Settings</Text>
+                  <Text style={styles.actionButtonText}>{t('settings')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Stats */}
-            <View style={styles.statsSection}>
-              <Text style={styles.sectionTitle}>Your Machines</Text>
-              <View style={styles.statsRow}>
-                <View style={styles.simpleStatCard}>
-                  <Text style={styles.statNumber}>{stats.listed}</Text>
-                  <Text style={styles.statLabel}>Total</Text>
-                </View>
-                <View style={styles.simpleStatCard}>
-                  <Text style={styles.statNumber}>{stats.published}</Text>
-                  <Text style={styles.statLabel}>Live</Text>
-                </View>
-                <View style={styles.simpleStatCard}>
-                  <Text style={styles.statNumber}>{stats.pending}</Text>
-                  <Text style={styles.statLabel}>Pending</Text>
-                </View>
-                <View style={styles.simpleStatCard}>
-                  <Text style={styles.statNumber}>{stats.sold}</Text>
-                  <Text style={styles.statLabel}>Sold</Text>
+            {/* Stats - Only show if authenticated */}
+            {authenticationStatus === 'authenticated' && (
+              <View style={styles.statsSection}>
+                <Text style={styles.sectionTitle}>
+                  {t('dashboard.yourMachines')}
+                </Text>
+                <View style={styles.statsRow}>
+                  <View style={styles.simpleStatCard}>
+                    <Text style={styles.statNumber}>{stats.listed}</Text>
+                    <Text style={styles.statLabel}>{t('dashboard.total')}</Text>
+                  </View>
+                  <View style={styles.simpleStatCard}>
+                    <Text style={styles.statNumber}>{stats.published}</Text>
+                    <Text style={styles.statLabel}>{t('dashboard.live')}</Text>
+                  </View>
+                  <View style={styles.simpleStatCard}>
+                    <Text style={styles.statNumber}>{stats.pending}</Text>
+                    <Text style={styles.statLabel}>{t('pending')}</Text>
+                  </View>
+                  <View style={styles.simpleStatCard}>
+                    <Text style={styles.statNumber}>{stats.sold}</Text>
+                    <Text style={styles.statLabel}>{t('dashboard.sold')}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
+            )}
 
             {/* Enhanced Machine Carousel */}
             <View style={styles.listingsSection}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recent Machines</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('MyList')}>
-                  <Text style={styles.seeAllText}>View All</Text>
-                </TouchableOpacity>
+                <Text style={styles.sectionTitle}>
+                  {authenticationStatus === 'authenticated' 
+                    ? t('dashboard.recentMachines')
+                    : t('dashboard.sampleMachines')
+                  }
+                </Text>
+                {authenticationStatus === 'authenticated' && (
+                  <TouchableOpacity onPress={() => navigation.navigate('MyList')}>
+                    <Text style={styles.seeAllText}>
+                      {t('dashboard.viewAll')}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {isLoadingListings ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color="#6366f1" />
-                  <Text style={styles.loadingText}>Loading machines...</Text>
+                  <Text style={styles.loadingText}>
+                    {t('dashboard.loadingMachines')}
+                  </Text>
                 </View>
-              ) : listings.length > 0 ? (
+              ) : listings.length > 0 && authenticationStatus === 'authenticated' ? (
                 <View style={styles.carouselWrapper}>
                   <FlatList
                     ref={carouselRef}
@@ -740,20 +895,23 @@ export default function DashboardScreen({ navigation }) {
                       index,
                     })}
                   />
-                  
+
                   {/* Pagination Dots */}
-                  <CarouselPagination 
-                    data={listings.slice(0, 10)} 
-                    currentIndex={currentIndex} 
+                  <CarouselPagination
+                    data={listings.slice(0, 10)}
+                    currentIndex={currentIndex}
                   />
-                  
+
                   {/* Manual Navigation Arrows */}
                   {listings.length > 1 && (
                     <View style={styles.navigationArrows}>
                       <TouchableOpacity
                         style={[styles.navArrow, styles.navArrowLeft]}
                         onPress={() => {
-                          const prevIndex = currentIndex === 0 ? listings.length - 1 : currentIndex - 1;
+                          const prevIndex =
+                            currentIndex === 0
+                              ? listings.length - 1
+                              : currentIndex - 1;
                           carouselRef.current?.scrollToIndex({
                             index: prevIndex,
                             animated: true,
@@ -763,11 +921,12 @@ export default function DashboardScreen({ navigation }) {
                       >
                         <Icon name="chevron-left" size={20} color="#6366f1" />
                       </TouchableOpacity>
-                      
+
                       <TouchableOpacity
                         style={[styles.navArrow, styles.navArrowRight]}
                         onPress={() => {
-                          const nextIndex = (currentIndex + 1) % listings.length;
+                          const nextIndex =
+                            (currentIndex + 1) % listings.length;
                           carouselRef.current?.scrollToIndex({
                             index: nextIndex,
                             animated: true,
@@ -818,7 +977,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleWidth(12),
+  },
+  dashboardLanguageButton: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0d9488',
+    shadowColor: '#0d9488',
+    shadowOffset: { width: 0, height: scaleHeight(2) },
+    shadowOpacity: 0.1,
+    shadowRadius: scale(4),
+    elevation: 3,
+  },
   header: {
     position: 'relative',
     overflow: 'hidden',

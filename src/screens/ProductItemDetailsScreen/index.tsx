@@ -15,6 +15,7 @@ import {
   PermissionsAndroid,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import Icon from 'react-native-vector-icons/Feather';
 import RNFetchBlob from 'rn-fetch-blob';
 import {
@@ -51,6 +52,7 @@ const FONTS = {
 };
 
 export default function ProductDetailScreen({ route, navigation }) {
+  const { t } = useTranslation();
   const { productId } = route.params;
   const [isLoading, setIsLoading] = useState(true);
   const [productData, setProductData] = useState(null);
@@ -65,7 +67,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       title,
       message,
       buttons: [
-        { text: 'OK', onPress: () => setAlertConfig({ visible: false }) },
+        { text: t('ok'), onPress: () => setAlertConfig({ visible: false }) },
       ],
     });
   };
@@ -76,7 +78,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       title,
       message,
       buttons: [
-        { text: 'OK', onPress: () => setAlertConfig({ visible: false }) },
+        { text: t('ok'), onPress: () => setAlertConfig({ visible: false }) },
       ],
     });
   };
@@ -88,11 +90,11 @@ export default function ProductDetailScreen({ route, navigation }) {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
           {
-            title: 'Storage Permission Required',
-            message: 'This app needs access to storage to download documents',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
+            title: t('productDetail.permissions.storageTitle'),
+            message: t('productDetail.permissions.storageMessage'),
+            buttonNeutral: t('productDetail.permissions.askLater'),
+            buttonNegative: t('cancel'),
+            buttonPositive: t('ok'),
           },
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
@@ -111,8 +113,8 @@ export default function ProductDetailScreen({ route, navigation }) {
       const hasPermission = await requestStoragePermission();
       if (!hasPermission) {
         showError({
-          title: 'Permission Required',
-          message: 'Storage permission is required to download documents',
+          title: t('productDetail.permissions.required'),
+          message: t('productDetail.permissions.storageRequired'),
         });
         return;
       }
@@ -123,14 +125,14 @@ export default function ProductDetailScreen({ route, navigation }) {
       // Get document URL and name
       const documentUrl = typeof doc === 'string' ? doc : doc.url || doc.path || doc.link;
       const documentName = typeof doc === 'string' 
-        ? `product_${productId}_document_${index + 1}.pdf` 
-        : doc.name || doc.filename || `product_${productId}_document_${index + 1}.pdf`;
+        ? t('productDetail.documents.defaultName', { productId, index: index + 1 })
+        : doc.name || doc.filename || t('productDetail.documents.defaultName', { productId, index: index + 1 });
 
       console.log('Document URL:', documentUrl);
       console.log('Document Name:', documentName);
 
       if (!documentUrl) {
-        throw new Error('Document URL not found');
+        throw new Error(t('productDetail.documents.urlNotFound'));
       }
 
       // Configure download path
@@ -143,9 +145,9 @@ export default function ProductDetailScreen({ route, navigation }) {
 
       // Show download started alert
       Alert.alert(
-        'Download Started',
-        `Downloading ${documentName}...`,
-        [{ text: 'OK' }]
+        t('productDetail.documents.downloadStarted'),
+        t('productDetail.documents.downloadingFile', { fileName: documentName }),
+        [{ text: t('ok') }]
       );
 
       // Start download
@@ -155,7 +157,7 @@ export default function ProductDetailScreen({ route, navigation }) {
           useDownloadManager: true,
           notification: true,
           path: filePath,
-          description: 'Downloading document...',
+          description: t('productDetail.documents.downloading'),
           mime: 'application/pdf',
         } : undefined,
         path: filePath,
@@ -164,25 +166,25 @@ export default function ProductDetailScreen({ route, navigation }) {
       // Success feedback
       if (Platform.OS === 'ios') {
         showSuccess({
-          title: 'Download Complete',
-          message: `${documentName} has been downloaded successfully!`,
+          title: t('productDetail.documents.downloadComplete'),
+          message: t('productDetail.documents.downloadSuccess', { fileName: documentName }),
         });
       } else {
         Alert.alert(
-          'Download Complete',
-          `${documentName} has been downloaded to your Downloads folder`,
+          t('productDetail.documents.downloadComplete'),
+          t('productDetail.documents.downloadedToFolder', { fileName: documentName }),
           [
-            { text: 'OK' },
+            { text: t('ok') },
             {
-              text: 'Open File',
+              text: t('productDetail.documents.openFile'),
               onPress: () => {
                 // Try to open the file
                 RNFetchBlob.android.actionViewIntent(filePath, 'application/pdf')
                   .catch(err => {
                     console.error('Cannot open file:', err);
                     showError({
-                      title: 'Cannot Open File',
-                      message: 'Please use a PDF viewer app to open this document.',
+                      title: t('productDetail.documents.cannotOpen'),
+                      message: t('productDetail.documents.usePdfViewer'),
                     });
                   });
               }
@@ -194,8 +196,8 @@ export default function ProductDetailScreen({ route, navigation }) {
     } catch (error) {
       console.error('Download error:', error);
       showError({
-        title: 'Download Failed',
-        message: error.message || 'Failed to download document. Please try again.',
+        title: t('productDetail.documents.downloadFailed'),
+        message: error.message || t('productDetail.documents.downloadError'),
       });
     } finally {
       // Remove downloading state
@@ -213,7 +215,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       const documentUrl = typeof doc === 'string' ? doc : doc.url || doc.path || doc.link;
       
       if (!documentUrl) {
-        throw new Error('Document URL not found');
+        throw new Error(t('productDetail.documents.urlNotFound'));
       }
 
       const supported = await Linking.canOpenURL(documentUrl);
@@ -222,15 +224,15 @@ export default function ProductDetailScreen({ route, navigation }) {
         await Linking.openURL(documentUrl);
       } else {
         showError({
-          title: 'Cannot Open Document',
-          message: 'Unable to open this document type',
+          title: t('productDetail.documents.cannotOpen'),
+          message: t('productDetail.documents.unableToOpen'),
         });
       }
     } catch (error) {
       console.error('Open document error:', error);
       showError({
-        title: 'Error',
-        message: 'Failed to open document',
+        title: t('error'),
+        message: t('productDetail.documents.failedToOpen'),
       });
     }
   };
@@ -238,20 +240,20 @@ export default function ProductDetailScreen({ route, navigation }) {
   // Handle document press with options
   const handleDocumentPress = (doc, index) => {
     const documentName = typeof doc === 'string' 
-      ? `Document ${index + 1}` 
-      : doc.name || doc.filename || `Document ${index + 1}`;
+      ? t('productDetail.documents.document', { index: index + 1 })
+      : doc.name || doc.filename || t('productDetail.documents.document', { index: index + 1 });
 
     Alert.alert(
-      'Document Options',
-      `What would you like to do with ${documentName}?`,
+      t('productDetail.documents.options'),
+      t('productDetail.documents.whatToDo', { fileName: documentName }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Download',
+          text: t('productDetail.documents.download'),
           onPress: () => downloadDocument(doc, index),
         },
         {
-          text: 'Open in Browser',
+          text: t('productDetail.documents.openInBrowser'),
           onPress: () => openDocumentInBrowser(doc, index),
         },
       ]
@@ -265,7 +267,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       if (response.data?.success && response.data.data) {
         setProductData(response.data.data);
       } else {
-        throw new Error('Invalid response format');
+        throw new Error(t('productDetail.errors.invalidResponse'));
       }
 
       Animated.timing(fadeAnim, {
@@ -274,7 +276,10 @@ export default function ProductDetailScreen({ route, navigation }) {
         useNativeDriver: true,
       }).start();
     } catch (error) {
-      showError({ title: 'Error', message: 'Failed to load product data.' });
+      showError({ 
+        title: t('error'), 
+        message: t('productDetail.errors.failedToLoad') 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -284,7 +289,10 @@ export default function ProductDetailScreen({ route, navigation }) {
     if (productId) {
       fetchProductData(productId);
     } else {
-      showError({ title: 'Error', message: 'No product ID provided' });
+      showError({ 
+        title: t('error'), 
+        message: t('productDetail.errors.noProductId') 
+      });
     }
   }, [productId]);
 
@@ -293,7 +301,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       <View style={[styles.container, styles.centered]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading product data...</Text>
+          <Text style={styles.loadingText}>{t('productDetail.loading')}</Text>
         </View>
       </View>
     );
@@ -307,11 +315,11 @@ export default function ProductDetailScreen({ route, navigation }) {
   // =========== STATUS BADGE ===========
   const getStatusBadge = (status) => {
     const statusConfig = {
-      pending: { color: COLORS.warning, text: 'Pending Review', icon: 'clock' },
-      published: { color: COLORS.success, text: 'Published', icon: 'check-circle' },
-      publish: { color: COLORS.success, text: 'Live', icon: 'check-circle' },
-      draft: { color: COLORS.textMuted, text: 'Draft', icon: 'edit-3' },
-      sold: { color: COLORS.accent, text: 'Sold', icon: 'shopping-bag' },
+      pending: { color: COLORS.warning, text: t('productDetail.status.pending'), icon: 'clock' },
+      published: { color: COLORS.success, text: t('productDetail.status.published'), icon: 'check-circle' },
+      publish: { color: COLORS.success, text: t('productDetail.status.live'), icon: 'check-circle' },
+      draft: { color: COLORS.textMuted, text: t('productDetail.status.draft'), icon: 'edit-3' },
+      sold: { color: COLORS.accent, text: t('productDetail.status.sold'), icon: 'shopping-bag' },
     };
 
     const config = statusConfig[status?.toLowerCase()] || statusConfig.draft;
@@ -330,8 +338,8 @@ export default function ProductDetailScreen({ route, navigation }) {
       return (
         <View style={styles.imagePlaceholder}>
           <Icon name="image" size={48} color={COLORS.textMuted} />
-          <Text style={styles.placeholderText}>No Images Available</Text>
-          <Text style={styles.placeholderSubtext}>Images will appear here when uploaded</Text>
+          <Text style={styles.placeholderText}>{t('productDetail.images.noImages')}</Text>
+          <Text style={styles.placeholderSubtext}>{t('productDetail.images.imagesWillAppear')}</Text>
         </View>
       );
     }
@@ -438,7 +446,7 @@ export default function ProductDetailScreen({ route, navigation }) {
             !value && { color: COLORS.textMuted },
           ]}
         >
-          {value || 'Not specified'}
+          {value || t('productDetail.notSpecified')}
         </Text>
       </View>
     </View>
@@ -467,13 +475,13 @@ export default function ProductDetailScreen({ route, navigation }) {
       <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
         <View style={styles.sectionHeaderWithIcon}>
           <Icon name="zap" size={20} color={COLORS.accent} />
-          <Text style={styles.sectionTitle}>Auction Details</Text>
+          <Text style={styles.sectionTitle}>{t('productDetail.sections.auctionDetails')}</Text>
         </View>
         <View style={styles.card}>
           <View style={styles.fieldRow}>
             <View style={styles.fieldHalf}>
               <DisplayPrice
-                label="Starting Price"
+                label={t('productDetail.auction.startingPrice')}
                 value={productData.auction_start_price}
                 currency={productData.currency}
                 icon="play-circle"
@@ -481,7 +489,7 @@ export default function ProductDetailScreen({ route, navigation }) {
             </View>
             <View style={styles.fieldHalf}>
               <DisplayPrice
-                label="Reserve Price"
+                label={t('productDetail.auction.reservePrice')}
                 value={productData.auction_reserve}
                 currency={productData.currency}
                 icon="shield"
@@ -491,23 +499,23 @@ export default function ProductDetailScreen({ route, navigation }) {
           </View>
           
           <DisplayField
-            label="Bid Increment"
-            value={productData.auction_increment ? `${productData.currency} ${productData.auction_increment}` : 'Not specified'}
+            label={t('productDetail.auction.bidIncrement')}
+            value={productData.auction_increment ? `${productData.currency} ${productData.auction_increment}` : t('productDetail.notSpecified')}
             icon="trending-up"
           />
           
           <View style={styles.fieldRow}>
             <View style={styles.fieldHalf}>
               <DisplayField
-                label="Start Time"
-                value={productData.auction_start_time || 'Not scheduled'}
+                label={t('productDetail.auction.startTime')}
+                value={productData.auction_start_time || t('productDetail.auction.notScheduled')}
                 icon="calendar"
               />
             </View>
             <View style={styles.fieldHalf}>
               <DisplayField
-                label="End Time"
-                value={productData.auction_end_time || 'Not scheduled'}
+                label={t('productDetail.auction.endTime')}
+                value={productData.auction_end_time || t('productDetail.auction.notScheduled')}
                 icon="calendar"
               />
             </View>
@@ -515,7 +523,7 @@ export default function ProductDetailScreen({ route, navigation }) {
           
           {productData.auction_group && (
             <DisplayField
-              label="Auction Group"
+              label={t('productDetail.auction.auctionGroup')}
               value={productData.auction_group}
               icon="users"
             />
@@ -538,8 +546,10 @@ export default function ProductDetailScreen({ route, navigation }) {
               <Icon name="arrow-left" size={24} color="#fff" />
             </TouchableOpacity>
             <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Product Detail</Text>
-              <Text style={styles.headerSubtitle}>ID: #{productData.ID}</Text>
+              <Text style={styles.headerTitle}>{t('productDetail.title')}</Text>
+              <Text style={styles.headerSubtitle}>
+                {t('productDetail.id', { id: productData.ID })}
+              </Text>
             </View>
             <View style={styles.headerRight}>
               <TouchableOpacity style={styles.shareButton}>
@@ -559,7 +569,7 @@ export default function ProductDetailScreen({ route, navigation }) {
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
           <View style={styles.sectionHeaderWithIcon}>
             <Icon name="image" size={20} color={COLORS.primary} />
-            <Text style={styles.sectionTitle}>Product Images</Text>
+            <Text style={styles.sectionTitle}>{t('productDetail.sections.images')}</Text>
           </View>
           {renderImageGallery()}
         </Animated.View>
@@ -568,11 +578,11 @@ export default function ProductDetailScreen({ route, navigation }) {
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
           <View style={styles.sectionHeaderWithIcon}>
             <Icon name="info" size={20} color={COLORS.primary} />
-            <Text style={styles.sectionTitle}>Basic Information</Text>
+            <Text style={styles.sectionTitle}>{t('productDetail.sections.basicInfo')}</Text>
           </View>
           <View style={styles.card}>
             <DisplayField
-              label="Product Title"
+              label={t('productDetail.fields.productTitle')}
               value={productData.title}
               icon="tag"
               type="highlight"
@@ -580,26 +590,26 @@ export default function ProductDetailScreen({ route, navigation }) {
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
                 <DisplayField
-                  label="Brand"
+                  label={t('productDetail.fields.brand')}
                   value={productData.brand}
                   icon="award"
                 />
               </View>
               <View style={styles.fieldHalf}>
                 <DisplayField
-                  label="Model"
+                  label={t('productDetail.fields.model')}
                   value={productData.model}
                   icon="cpu"
                 />
               </View>
             </View>
             <DisplayField
-              label="Manufacturing Year"
+              label={t('productDetail.fields.manufacturingYear')}
               value={productData.manufacturing_year}
               icon="calendar"
             />
             <DisplayField
-              label="Description"
+              label={t('productDetail.fields.description')}
               value={productData.description}
               icon="file-text"
               multiline
@@ -611,27 +621,27 @@ export default function ProductDetailScreen({ route, navigation }) {
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
           <View style={styles.sectionHeaderWithIcon}>
             <Icon name="shield-check" size={20} color={COLORS.primary} />
-            <Text style={styles.sectionTitle}>Condition & Status</Text>
+            <Text style={styles.sectionTitle}>{t('productDetail.sections.conditionStatus')}</Text>
           </View>
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
                 <DisplayField
-                  label="Item Condition"
+                  label={t('productDetail.fields.itemCondition')}
                   value={productData.item_condition}
                   icon="shield-check"
                 />
               </View>
               <View style={styles.fieldHalf}>
                 <DisplayField
-                  label="Operation Status"
+                  label={t('productDetail.fields.operationStatus')}
                   value={productData.operation_status}
                   icon="activity"
                 />
               </View>
             </View>
             <DisplayField
-              label="Listing Status"
+              label={t('productDetail.fields.listingStatus')}
               value={productData.status}
               icon="info"
             />
@@ -642,20 +652,20 @@ export default function ProductDetailScreen({ route, navigation }) {
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
           <View style={styles.sectionHeaderWithIcon}>
             <Icon name="dollar-sign" size={20} color={COLORS.success} />
-            <Text style={styles.sectionTitle}>Pricing Information</Text>
+            <Text style={styles.sectionTitle}>{t('productDetail.sections.pricing')}</Text>
           </View>
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
                 <DisplayField
-                  label="Currency"
+                  label={t('productDetail.fields.currency')}
                   value={productData.currency}
                   icon="dollar-sign"
                 />
               </View>
               <View style={styles.fieldHalf}>
                 <DisplayPrice
-                  label="Price"
+                  label={t('productDetail.fields.price')}
                   value={productData.price}
                   currency={productData.currency}
                   icon="tag"
@@ -672,7 +682,7 @@ export default function ProductDetailScreen({ route, navigation }) {
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
           <View style={styles.sectionHeaderWithIcon}>
             <Icon name="package" size={20} color={COLORS.primary} />
-            <Text style={styles.sectionTitle}>Product Type</Text>
+            <Text style={styles.sectionTitle}>{t('productDetail.sections.productType')}</Text>
           </View>
           <View style={styles.card}>
             <View style={styles.productTypeContainer}>
@@ -702,10 +712,10 @@ export default function ProductDetailScreen({ route, navigation }) {
                         styles.productTypeTextActive,
                     ]}
                   >
-                    Marketplace
+                    {t('productDetail.productType.marketplace')}
                   </Text>
                   <Text style={styles.productTypeDescription}>
-                    Sell at fixed price
+                    {t('productDetail.productType.marketplaceDesc')}
                   </Text>
                 </View>
                 {productData.product_type === 'marketplace' && (
@@ -742,10 +752,10 @@ export default function ProductDetailScreen({ route, navigation }) {
                         styles.productTypeTextActive,
                     ]}
                   >
-                    Auction
+                    {t('productDetail.productType.auction')}
                   </Text>
                   <Text style={styles.productTypeDescription}>
-                    Let buyers bid
+                    {t('productDetail.productType.auctionDesc')}
                   </Text>
                 </View>
                 {productData.product_type === 'auction' && (
@@ -765,23 +775,23 @@ export default function ProductDetailScreen({ route, navigation }) {
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
           <View style={styles.sectionHeaderWithIcon}>
             <Icon name="map-pin" size={20} color={COLORS.primary} />
-            <Text style={styles.sectionTitle}>Location & Category</Text>
+            <Text style={styles.sectionTitle}>{t('productDetail.sections.locationCategory')}</Text>
           </View>
           <View style={styles.card}>
             <DisplayField
-              label="Category"
+              label={t('productDetail.fields.category')}
               value={productData.category}
               icon="list"
             />
             {productData.subcategory && (
               <DisplayField
-                label="Sub Category"
+                label={t('productDetail.fields.subCategory')}
                 value={productData.subcategory}
                 icon="tag"
               />
             )}
             <DisplayField
-              label="Location"
+              label={t('productDetail.fields.location')}
               value={productData.location}
               icon="map-pin"
             />
@@ -793,14 +803,14 @@ export default function ProductDetailScreen({ route, navigation }) {
           <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
             <View style={styles.sectionHeaderWithIcon}>
               <Icon name="file-text" size={20} color={COLORS.primary} />
-              <Text style={styles.sectionTitle}>Documents</Text>
+              <Text style={styles.sectionTitle}>{t('productDetail.sections.documents')}</Text>
             </View>
             <View style={styles.card}>
               {productData.pdf_documents.map((doc, index) => {
                 const isDownloading = downloadingDocs[index];
                 const documentName = typeof doc === 'string' 
-                  ? `Document ${index + 1}` 
-                  : doc.name || doc.filename || `Document ${index + 1}`;
+                  ? t('productDetail.documents.document', { index: index + 1 })
+                  : doc.name || doc.filename || t('productDetail.documents.document', { index: index + 1 });
                 
                 return (
                   <TouchableOpacity 
@@ -829,7 +839,10 @@ export default function ProductDetailScreen({ route, navigation }) {
                         {documentName}
                       </Text>
                       <Text style={styles.documentSubtext}>
-                        {isDownloading ? 'Downloading...' : 'Tap to download or view'}
+                        {isDownloading 
+                          ? t('productDetail.documents.downloading') 
+                          : t('productDetail.documents.tapToDownload')
+                        }
                       </Text>
                     </View>
                     
@@ -850,7 +863,7 @@ export default function ProductDetailScreen({ route, navigation }) {
               <View style={styles.documentInfoContainer}>
                 <Icon name="info" size={14} color={COLORS.textMuted} />
                 <Text style={styles.documentInfoText}>
-                  Tap any document to download or view in browser
+                  {t('productDetail.documents.downloadInfo')}
                 </Text>
               </View>
             </View>
@@ -1191,7 +1204,6 @@ const styles = StyleSheet.create({
 
   productTypeContainer: { 
     flexDirection: 'column', 
-    // marginBottom: scaleHeight(30) 
   },
   productTypeButton: {
     flex: 1,

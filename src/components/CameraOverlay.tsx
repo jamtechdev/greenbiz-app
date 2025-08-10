@@ -12,6 +12,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Icon from 'react-native-vector-icons/Feather';
 
 const { width, height } = Dimensions.get('window');
@@ -25,6 +26,7 @@ const CameraOverlay = ({
   onImagesComplete, // Called when user finishes selecting images
   images = [], // Array of selected images
 }) => {
+  const { t } = useTranslation();
   const [selectedImages, setSelectedImages] = useState(images);
   const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0);
   
@@ -36,9 +38,27 @@ const CameraOverlay = ({
     setSelectedImages(images);
   }, [images]);
 
+  // Reset state when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      setSelectedImages(images);
+      setCurrentPreviewIndex(0);
+    }
+  }, [visible, images]);
+
+  const handleClose = () => {
+    // Reset all state before closing
+    setSelectedImages([]);
+    setCurrentPreviewIndex(0);
+    onClose();
+  };
+
   const handleAddImage = (imageUri) => {
     if (selectedImages.length >= MAX_IMAGES) {
-      Alert.alert('Maximum Limit', `You can only select up to ${MAX_IMAGES} images.`);
+      Alert.alert(
+        t('cameraOverlay.maxLimit'),
+        t('cameraOverlay.maxLimitMessage', { maxImages: MAX_IMAGES })
+      );
       return;
     }
     
@@ -70,12 +90,12 @@ const CameraOverlay = ({
 
   const handleRemoveImage = (index) => {
     Alert.alert(
-      'Remove Image',
-      'Are you sure you want to remove this image?',
+      t('cameraOverlay.removeImage'),
+      t('cameraOverlay.removeImageConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: t('remove'),
           style: 'destructive',
           onPress: () => {
             const newImages = selectedImages.filter((_, i) => i !== index);
@@ -95,7 +115,10 @@ const CameraOverlay = ({
 
   const handleFinish = () => {
     if (selectedImages.length === 0) {
-      Alert.alert('No Images', 'Please select at least one image.');
+      Alert.alert(
+        t('cameraOverlay.noImages'),
+        t('cameraOverlay.noImagesMessage')
+      );
       return;
     }
     onImagesComplete(selectedImages);
@@ -138,13 +161,13 @@ const CameraOverlay = ({
       <SafeAreaView style={styles.overlay}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.iconBtn} onPress={onClose}>
+          <TouchableOpacity style={styles.iconBtn} onPress={handleClose}>
             <Icon name="x" size={24} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Scan Machine</Text>
+            <Text style={styles.headerTitle}>{t('cameraOverlay.scanMachine')}</Text>
             <Text style={styles.headerSubtitle}>
-              {selectedImages.length}/{MAX_IMAGES} images
+              {selectedImages.length}/{MAX_IMAGES} {t('cameraOverlay.images')}
             </Text>
           </View>
           <TouchableOpacity style={styles.iconBtn}>
@@ -211,11 +234,11 @@ const CameraOverlay = ({
                     onPress={() => handleRemoveImage(currentPreviewIndex)}
                   >
                     <Icon name="trash-2" size={16} color="#fff" style={styles.buttonIcon} />
-                    <Text style={styles.removeText}>Remove</Text>
+                    <Text style={styles.removeText}>{t('remove')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
                     <Text style={styles.finishText}>
-                      Finish ({selectedImages.length})
+                      {t('cameraOverlay.finish')} ({selectedImages.length})
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -227,9 +250,9 @@ const CameraOverlay = ({
             {/* Top Instructions */}
             <View style={styles.topOverlayInfo}>
               <Icon name="camera" size={64} color="rgba(255,255,255,0.4)" />
-              <Text style={styles.overlayTitle}>Position machine in viewfinder</Text>
+              <Text style={styles.overlayTitle}>{t('cameraOverlay.positionMachine')}</Text>
               <Text style={styles.overlaySubtitle}>
-                Add up to {MAX_IMAGES} images for better analysis
+                {t('cameraOverlay.addUpToImages', { maxImages: MAX_IMAGES })}
               </Text>
             </View>
 
@@ -243,7 +266,7 @@ const CameraOverlay = ({
                 <View style={[styles.corner, styles.bottomRight]} />
                 
                 <Icon name="camera" size={32} color="rgba(255,255,255,0.7)" />
-                <Text style={styles.centerText}>Center machine here</Text>
+                <Text style={styles.centerText}>{t('cameraOverlay.centerMachine')}</Text>
               </View>
             </View>
 
@@ -251,11 +274,11 @@ const CameraOverlay = ({
             <View style={styles.actions}>
               <TouchableOpacity style={styles.button} onPress={handleCameraPick}>
                 <Icon name="camera" size={20} color="#fff" style={styles.buttonIcon} />
-                <Text style={styles.buttonText}>Take Photo</Text>
+                <Text style={styles.buttonText}>{t('cameraOverlay.takePhoto')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={handleGalleryPick}>
                 <Icon name="image" size={20} color="#34d399" style={styles.buttonIcon} />
-                <Text style={[styles.buttonText, styles.secondaryButtonText]}>Gallery</Text>
+                <Text style={[styles.buttonText, styles.secondaryButtonText]}>{t('cameraOverlay.gallery')}</Text>
               </TouchableOpacity>
             </View>
           </View>
