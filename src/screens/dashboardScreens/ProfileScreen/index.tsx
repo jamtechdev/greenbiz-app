@@ -1027,6 +1027,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     minHeight: scaleHeight(64),
+       marginTop: scaleHeight(10),
   },
   backButton: {
     padding: spacing.sm,

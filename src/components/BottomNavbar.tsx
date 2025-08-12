@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -9,6 +10,8 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 
 export default function BottomNav({ onScanPress, setShowOverlay,navigation }) {
+    const { t } = useTranslation();
+
   return (
     <View style={styles.navContainer}>
       {/* My Listings */}
@@ -16,7 +19,7 @@ export default function BottomNav({ onScanPress, setShowOverlay,navigation }) {
        onPress={() => navigation.navigate('MyList')}
       >
         <Icon name="file-text" size={20} color="#6b7280" />
-        <Text style={styles.navLabel}>My Listings</Text>
+        <Text style={styles.navLabel}>{t('myListings')}</Text>
       </TouchableOpacity>
 
       {/* Scan Button (Center Floating) */}
@@ -33,7 +36,7 @@ export default function BottomNav({ onScanPress, setShowOverlay,navigation }) {
        onPress={() => navigation.navigate('MyProfile')} 
       >
         <Icon name="user" size={20} color="#6b7280" />
-        <Text style={styles.navLabel}>Profile</Text>
+        <Text style={styles.navLabel}>{t('profile.profile', 'Profile')}</Text>
       </TouchableOpacity>
     </View>
   );

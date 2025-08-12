@@ -32,6 +32,7 @@ import {
   selectLanguageLoading,
   selectAvailableLanguages 
 } from '../../../store/slices/languageSlice';
+import { scaleHeight } from '../../../utils/resposive';
 
 const { width, height } = Dimensions.get('window');
 
@@ -321,8 +322,8 @@ export default function MyListingsScreen({ navigation }) {
     if (!dateString) return 'Unknown';
     try {
       const date = new Date(dateString);
-      if (currentLanguage === 'zh-TW') {
-        return date.toLocaleDateString('zh-TW', {
+      if (currentLanguage === 'zh-hant') {
+        return date.toLocaleDateString('zh-hant', {
           year: 'numeric',
           month: 'numeric',
           day: 'numeric',
@@ -423,7 +424,7 @@ export default function MyListingsScreen({ navigation }) {
 
               <View style={styles.headerRight}>
                 {/* Language Toggle Button */}
-                <TouchableOpacity
+                {/* <TouchableOpacity
                   style={styles.languageButton}
                   onPress={() => setShowLanguageModal(true)}
                   activeOpacity={0.8}
@@ -437,7 +438,7 @@ export default function MyListingsScreen({ navigation }) {
                       {getLanguageShortName(currentLanguage)}
                     </Text>
                   )}
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
             </View>
 
@@ -571,12 +572,12 @@ export default function MyListingsScreen({ navigation }) {
                           style={styles.cardImage}
                           resizeMode='contain'
                         />
-                        <View style={styles.imageOverlay}>
+                        {/* <View style={styles.imageOverlay}>
                           <View style={styles.viewsBadge}>
                             <Icon name="eye" size={12} color="#fff" />
                             <Text style={styles.viewsText}>0</Text>
                           </View>
-                        </View>
+                        </View> */}
                       </View>
 
                       <View style={styles.cardBody}>
@@ -890,7 +891,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 28,
+       marginTop: scaleHeight(20),
+        marginBottom: scaleHeight(20),
   },
   headerLeft: {
     flex: 1,

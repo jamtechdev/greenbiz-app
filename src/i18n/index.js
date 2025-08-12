@@ -6,89 +6,104 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import translation files
 import en from '../locales/en/translation.json';
-import zhTW from '../locales/zh-TW/translation.json';
+// Keep your existing file; we’ll alias it to zh-Hant.
+import zhHant from '../locales/zh-TW/translation.json';
 
 const LANGUAGE_KEY = 'selected_language';
 
-const resources = {
-  en: {
-    translation: en,
-  },
-  'zh-TW': {
-    translation: zhTW,
-  },
+// ---- Normalize to canonical 'zh-Hant' ----
+const normalizeLanguageCode = (code) => {
+  if (!code) return 'en';
+  const s = String(code);
+
+  // Fast paths
+  if (s === 'en' || s === 'zh-Hant') return s;
+
+  const lower = s.toLowerCase();
+
+  // Legacy & variants → zh-Hant
+  if (
+    lower === 'zh-tw' ||
+    s === 'zh-TW' ||
+    lower === 'zh-hant' ||
+    lower.startsWith('zh-hant') ||
+    lower.startsWith('zh-tw') ||
+    (lower.startsWith('zh') && lower.includes('hant'))
+  ) {
+    return 'zh-Hant';
+  }
+
+  // Any other zh* → choose zh-Hant since that’s what we support
+  if (lower.startsWith('zh')) return 'zh-Hant';
+
+  return 'en';
 };
 
-// Get device language
+// ---- Resources ----
+// Expose both keys. Both point to the same translations.
+const resources = {
+  en: { translation: en },
+  'zh-Hant': { translation: zhHant },
+  'zh-TW': { translation: zhHant }, // legacy alias
+};
+
+// ---- Device language detection ----
 const getDeviceLanguage = () => {
   const locales = RNLocalize.getLocales();
-  if (locales.length > 0) {
-    const deviceLanguage = locales[0].languageTag;
-    // Map common Chinese variants to zh-TW
-    if (deviceLanguage.includes('zh') && 
-        (deviceLanguage.includes('TW') || deviceLanguage.includes('Hant'))) {
-      return 'zh-TW';
-    }
-    return deviceLanguage.startsWith('zh') ? 'zh-TW' : 'en';
+  if (locales && locales.length > 0) {
+    const { languageTag } = locales[0]; // e.g., "zh-Hant-TW", "zh-TW", "en-US"
+    return normalizeLanguageCode(languageTag);
   }
   return 'en';
 };
 
-// Function to get saved language
+// ---- Persistence helpers ----
 const getSavedLanguage = async () => {
   try {
-    const savedLanguage = await AsyncStorage.getItem(LANGUAGE_KEY);
-    return savedLanguage || getDeviceLanguage();
+    const saved = await AsyncStorage.getItem(LANGUAGE_KEY);
+    return normalizeLanguageCode(saved || getDeviceLanguage());
   } catch (error) {
     console.log('Error getting saved language:', error);
-    return getDeviceLanguage();
+    return normalizeLanguageCode(getDeviceLanguage());
   }
 };
 
-// Function to save language
 export const saveLanguage = async (language) => {
   try {
-    await AsyncStorage.setItem(LANGUAGE_KEY, language);
-    console.log('✅ Language saved:', language);
+    const normalized = normalizeLanguageCode(language);
+    await AsyncStorage.setItem(LANGUAGE_KEY, normalized);
+    console.log('✅ Language saved:', normalized);
   } catch (error) {
     console.log('❌ Error saving language:', error);
   }
 };
 
-// Function to change language and save it
 export const changeLanguage = async (language) => {
   try {
-    await saveLanguage(language);
-    await i18n.changeLanguage(language);
-    console.log('✅ Language changed to:', language);
+    const normalized = normalizeLanguageCode(language);
+    await saveLanguage(normalized);
+    await i18n.changeLanguage(normalized);
+    console.log('✅ Language changed to:', normalized);
   } catch (error) {
     console.log('❌ Error changing language:', error);
   }
 };
 
-// Initialize i18n
-i18n
-  .use(initReactI18next)
-  .init({
-    resources,
-    lng: 'en', // Will be overridden by initializeLanguage
-    fallbackLng: 'en',
-    debug: __DEV__,
-    
-    interpolation: {
-      escapeValue: false,
-    },
-    
-    react: {
-      useSuspense: false,
-    },
-    
-    // Add pluralization support
-    pluralSeparator: '_',
-    keySeparator: '.',
-  });
+// ---- i18n init ----
+i18n.use(initReactI18next).init({
+  resources,
+  lng: 'en', // will be overridden below
+  fallbackLng: 'en',
+  debug: __DEV__,
 
-// Initialize with saved language
+  interpolation: { escapeValue: false },
+  react: { useSuspense: false },
+
+  pluralSeparator: '_',
+  keySeparator: '.',
+});
+
+// Initialize with saved/device language (normalized)
 const initializeLanguage = async () => {
   try {
     const language = await getSavedLanguage();
@@ -99,7 +114,6 @@ const initializeLanguage = async () => {
   }
 };
 
-// Call this after i18n.init()
 initializeLanguage();
 
 export default i18n;

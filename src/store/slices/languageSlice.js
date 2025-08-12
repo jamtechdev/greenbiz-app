@@ -13,9 +13,9 @@ const getDeviceLanguage = () => {
     const deviceLanguage = locales[0].languageTag;
     if (deviceLanguage.includes('zh') && 
         (deviceLanguage.includes('TW') || deviceLanguage.includes('Hant'))) {
-      return 'zh-TW';
+      return 'zh-hant';
     }
-    return deviceLanguage.startsWith('zh') ? 'zh-TW' : 'en';
+    return deviceLanguage.startsWith('zh') ? 'zh-hant' : 'en';
   }
   return 'en';
 };
@@ -29,7 +29,7 @@ export const availableLanguages = [
     shortName: 'EN'
   },
   { 
-    code: 'zh-TW', 
+    code: 'zh-hant', 
     name: 'Traditional Chinese', 
     nativeName: '繁體中文',
     shortName: '中'

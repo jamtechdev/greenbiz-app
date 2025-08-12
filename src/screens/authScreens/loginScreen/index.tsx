@@ -29,10 +29,11 @@ import {
 } from '../../../store/slices/authSlice';
 import {
   selectCurrentLanguage,
-  selectIsLanguageInitialized 
+  selectIsLanguageInitialized
 } from '../../../store/slices/languageSlice';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
 import CustomAlert from '../../../components/CustomAlert';
+import { scaleHeight } from '../../../utils/resposive';
 
 const { width, height } = Dimensions.get('window');
 
@@ -61,7 +62,7 @@ const LoginScreen = ({ navigation, route }) => {
   // Get navigation params and Redux state
   const { fromScreen, screenParams } = route.params || {};
   const { pendingNavigation } = useSelector(state => state.auth);
-
+  console.log(fromScreen, 'lkoijuio', screenParams)
   // Show loading if language is not initialized
   if (!isLanguageInitialized) {
     return (
@@ -197,7 +198,7 @@ const LoginScreen = ({ navigation, route }) => {
     // Priority 1: Navigate back to the screen that brought us here (fromScreen param)
     if (fromScreen) {
       // console.log('✅ Navigating back to fromScreen:', fromScreen);
-
+      console.log(fromScreen, 'autyda7dtad')
       try {
         if (screenParams) {
           // console.log('📦 With params:', screenParams);
@@ -211,6 +212,8 @@ const LoginScreen = ({ navigation, route }) => {
         console.error('❌ Error navigating to fromScreen:', error);
         // Fall through to other options
       }
+    } else {
+      navigation.navigate('Dashboard');
     }
 
     // Priority 2: Check for pending navigation from Redux
@@ -256,14 +259,14 @@ const LoginScreen = ({ navigation, route }) => {
   const handleSignUp = () => {
     // Pass the original navigation context to signup screen
     const signupParams = {};
-    
+
     // If we came from a specific screen, pass that context to signup
     if (fromScreen || pendingNavigation) {
       signupParams.fromScreen = fromScreen;
       signupParams.screenParams = screenParams;
       signupParams.originalPendingNavigation = pendingNavigation;
     }
-    
+
     navigation.navigate('Signup', signupParams);
   };
 
@@ -277,7 +280,7 @@ const LoginScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={'#c0faf5'} />
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardAvoidingView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
@@ -292,7 +295,7 @@ const LoginScreen = ({ navigation, route }) => {
         >
           {/* Language Selector */}
           <View style={styles.languageSelectorContainer}>
-            <LanguageSelector 
+            <LanguageSelector
               size="small"
               buttonStyle={styles.loginLanguageButton}
             />
@@ -490,7 +493,8 @@ const styles = StyleSheet.create({
   },
   languageSelectorContainer: {
     alignItems: 'flex-end',
-    marginBottom: 20,
+    marginTop: scaleHeight(20),
+    marginBottom: scaleHeight(20),
   },
   loginLanguageButton: {
     backgroundColor: '#ffffff',

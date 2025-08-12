@@ -29,6 +29,8 @@ import { apiService } from '../../../api/axiosConfig';
 import { useCustomAlert } from '../../../hook/useCustomAlert';
 import EnhancedMarketAnalysis from '../../../components/EnhancedMarketAnalysis';
 import { scaleFont, scaleHeight, scaleWidth, scale } from '../../../utils/resposive';
+import { useSelector } from 'react-redux';
+import { selectCurrentLanguage } from '../store/slices/languageSlice';
 
 const { width, height } = Dimensions.get('window');
 
@@ -126,7 +128,8 @@ export default function EditProductScreen({ route, navigation }) {
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [loadingAuctionGroups, setLoadingAuctionGroups] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
-
+  const currentLanguage = useSelector(selectCurrentLanguage);
+  console.log(currentLanguage, 'sadhasliudhasuidasd')
   // Validation state
   const [validationErrors, setValidationErrors] = useState({});
 
@@ -241,7 +244,7 @@ export default function EditProductScreen({ route, navigation }) {
   const fetchCategories = async () => {
     try {
       setLoadingCategories(true);
-      const response = await apiService.getCategories();
+      const response = await apiService.getCategories(currentLanguage);
       
       if (response.data) {
         const categoryList = Array.isArray(response.data)
@@ -309,11 +312,11 @@ export default function EditProductScreen({ route, navigation }) {
       setLoadingLocations(false);
     }
   };
-
+  
   const fetchAuctionGroups = async () => {
     try {
       setLoadingAuctionGroups(true);
-      const response = await apiService.getAuctionGroups();
+      const response = await apiService.getAuctionGroups(currentLanguage);
       
       if (response.data) {
         const auctionGroupList = Array.isArray(response.data)

@@ -71,6 +71,7 @@
     },
     "profile": {
         "myProfile": "我的個人資料",
+        "profile" :"简介",
         "editDetails": "編輯您的詳細資料",
         "manageAccount": "管理您的帳戶",
         "loadingProfile": "正在載入您的個人資料...",
@@ -198,7 +199,8 @@
             "marketplace": "市場交易",
             "marketplaceDesc": "固定價格出售",
             "auction": "拍賣",
-            "auctionDesc": "讓買家競標"
+            "auctionDesc": "讓買家競標",
+            "market" : "市場"
         },
         "documents": {
             "defaultName": "產品_{{productId}}_文件_{{index}}.pdf",

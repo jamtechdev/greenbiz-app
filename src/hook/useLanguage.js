@@ -18,7 +18,7 @@ import {
 // Flag emoji mapping for English and Traditional Chinese only
 const FLAG_MAPPING = {
   'en': '🇺🇸', // English - US Flag
-  'zh-TW': '🇹🇼', // Traditional Chinese - Taiwan Flag
+  'zh-hant': '🇹🇼', // Traditional Chinese - Taiwan Flag
 };
 
 // Alternative flag representations with additional metadata
@@ -30,7 +30,7 @@ const FLAG_UNICODE_MAPPING = {
     countryName: 'United States',
     languageName: 'English'
   },
-  'zh-TW': { 
+  'zh-hant': { 
     unicode: '🇹🇼', 
     code: 'TW', 
     name: 'Taiwan',
@@ -73,7 +73,7 @@ export const useLanguage = () => {
   }, [dispatch]);
 
   const toggleLanguage = useCallback(() => {
-    const newLanguage = currentLanguage === 'en' ? 'zh-TW' : 'en';
+    const newLanguage = currentLanguage === 'en' ? 'zh-hant' : 'en';
     return dispatch(changeLanguage(newLanguage));
   }, [currentLanguage, dispatch]);
 
@@ -187,7 +187,7 @@ export const useLanguage = () => {
     getSupportedLanguagesWithFlags,
     
     // Constants for external use
-    supportedLanguages: ['en', 'zh-TW'],
+    supportedLanguages: ['en', 'zh-hant'],
     flagMapping: FLAG_MAPPING,
     flagUnicodeMapping: FLAG_UNICODE_MAPPING,
   };

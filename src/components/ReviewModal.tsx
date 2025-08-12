@@ -20,6 +20,8 @@ import CustomDateTimePicker from './CustomDateTimePicker';
 import MediaUploadComponent from './MediaUpload';
 import { apiService } from '../api/axiosConfig';
 import { scale, scaleFont, scaleHeight, scaleWidth } from '../utils/resposive';
+import { useSelector } from 'react-redux';
+import { selectCurrentLanguage } from '../store/slices/languageSlice';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -48,7 +50,7 @@ export default function DetailModal({
   const [submissionType, setSubmissionType] = useState(''); // Track which button was clicked
   const [customAuctionGroup, setCustomAuctionGroup] = useState('');
   const [showCustomAuctionGroup, setShowCustomAuctionGroup] = useState(false);
-
+  const currentLanguage = useSelector(selectCurrentLanguage);
   // Local media files state (fallback if not provided via props)
   const [localMediaFiles, setLocalMediaFiles] = useState([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
@@ -176,9 +178,10 @@ export default function DetailModal({
   const fetchCategories = async () => {
     try {
       setLoadingCategories(true);
-      const response = await apiService.getCategories();
+      const response = await apiService.getCategories(currentLanguage);
+      console.log(currentLanguage ,'kja')
 
-      console.log('Categories API Response:', response.data);
+      console.log('Categories API Response:', response.data ,'asdsadasd');
 
       if (response.data) {
         const categoryList = Array.isArray(response.data)

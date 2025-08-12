@@ -13,6 +13,8 @@ import {
   RefreshControl,
   Image,
   Dimensions,
+  Platform,
+  PermissionsAndroid
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
@@ -36,6 +38,7 @@ import {
   scaleWidth,
 } from '../../../utils/resposive';
 import LanguageSelector from '../../../components/LanguageSelector';
+import CameraRoll, { useCameraRoll } from '@react-native-camera-roll/camera-roll';
 
 const { width } = Dimensions.get('window');
 
@@ -43,8 +46,8 @@ export default function DashboardScreen({ navigation }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const { showOverlay, setShowOverlay } = useAppContext();
-  
-  // All useState hooks declared at the top level
+
+  // State
   const [selectedImages, setSelectedImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState('');
@@ -55,47 +58,74 @@ export default function DashboardScreen({ navigation }) {
   const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [hasAutoOpenedOverlay, setHasAutoOpenedOverlay] = useState(false);
-  const [authenticationStatus, setAuthenticationStatus] = useState('checking'); // 'checking', 'authenticated', 'unauthenticated'
+  const [authenticationStatus, setAuthenticationStatus] = useState('checking'); // 'checking' | 'authenticated' | 'unauthenticated'
 
-  // All useRef hooks
+  // Refs
   const carouselRef = useRef(null);
-
-  // All useSelector hooks
-  const {
-    loading,
-    error: analysisError,
-    analysisData,
-  } = useSelector(state => state.analysis);
+  // Selectors
+  const { loading, error: analysisError, analysisData } = useSelector(
+    state => state.analysis,
+  );
   const { user, isAuthenticated, token } = useSelector(
     state => state.auth || {},
   );
   const currentLanguage = useSelector(selectCurrentLanguage);
   const isLanguageInitialized = useSelector(selectIsLanguageInitialized);
+  const [photos, getPhotos, save] = useCameraRoll();
+  // ---- Helpers: normalize, permissions, save ----
+  const toFileUri = item => {
+    const raw = typeof item === 'string' ? item : item?.uri || item?.path || '';
+    if (!raw) return '';
+    if (raw.startsWith('content://')) return raw;
+    if (raw.startsWith('file://')) return raw;
+    if (raw.startsWith('/')) return `file://${raw}`;
+    return raw;
+  };
 
-  // FIXED: Add authentication check function
+  const normalizeImageList = images =>
+    (images || []).map(toFileUri).filter(Boolean);
+
+  const ensureSavePermission = async () => {
+    if (Platform.OS === 'android' && Platform.Version < 29) {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        {
+          title: 'Storage permission',
+          message: 'We need access to save photos to your Gallery.',
+          buttonPositive: 'OK',
+        },
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    }
+    return true;
+  };
+
+  const saveImagesToGallery = async (uris, album = 'GreenBidz') => {
+    const ok = await ensureSavePermission();
+    if (!ok) throw new Error('Permission denied');
+
+    const saved = [];
+    for (const uri of uris) {
+      const result = await save(uri, { type: 'photo', album });
+      saved.push(result);
+      // console.log('Saved to gallery:', result);
+    }
+    return saved;
+  };
+
+  // ---- Auth check ----
   const checkAuthenticationStatus = useCallback(async () => {
     try {
-      console.log('🔍 Checking authentication status...');
-      
-      // Check AsyncStorage for token
       const storedToken = await AsyncStorage.getItem('userToken');
       const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
-      
-      console.log('📦 Stored token exists:', !!storedToken);
-      console.log('📦 IsLoggedIn flag:', isLoggedIn);
-      console.log('🔐 Redux isAuthenticated:', isAuthenticated);
-      console.log('🔐 Redux token exists:', !!token);
-      
-      // User is authenticated if ANY of these conditions are true:
+
       const userIsAuthenticated = !!(
-        storedToken || 
-        (isLoggedIn === 'true') || 
-        isAuthenticated || 
+        storedToken ||
+        isLoggedIn === 'true' ||
+        isAuthenticated ||
         token
       );
-      
-      console.log('✅ Final authentication status:', userIsAuthenticated);
-      
+
       if (userIsAuthenticated) {
         setAuthenticationStatus('authenticated');
         setIsUnauthorized(false);
@@ -106,50 +136,39 @@ export default function DashboardScreen({ navigation }) {
         return false;
       }
     } catch (error) {
-      console.error('❌ Error checking authentication:', error);
+      console.error('Error checking authentication:', error);
       setAuthenticationStatus('unauthenticated');
       setIsUnauthorized(true);
       return false;
     }
   }, [isAuthenticated, token]);
 
-  // All useCallback hooks
+  // ---- Data load ----
   const loadListings = useCallback(async () => {
     try {
       setIsLoadingListings(true);
       setError(null);
 
-      console.log('📋 Starting to load listings...');
-      
       const response = await apiService.getAllListing();
-      console.log('📋 Listings API response:', response.data);
 
-      // Handle the actual API response structure
       if (
-        response.data &&
+        response?.data &&
         response.data.success &&
         Array.isArray(response.data.data)
       ) {
         setListings(response.data.data);
-        console.log('✅ Listings set from success response:', response.data.data.length, 'items');
-      } else if (response.data && Array.isArray(response.data)) {
+      } else if (response?.data && Array.isArray(response.data)) {
         setListings(response.data);
-        console.log('✅ Listings set from direct array:', response.data.length, 'items');
       } else {
-        console.log('⚠️ Unexpected listings format:', response.data);
         setListings([]);
       }
     } catch (error) {
-      console.error('❌ Failed to load listings:', error);
+      console.error('Failed to load listings:', error);
 
-      // Handle different error types
       if (error.response?.status === 401) {
-        console.log('🚫 401 Unauthorized - token may be expired');
         setIsUnauthorized(true);
         setAuthenticationStatus('unauthenticated');
         setError('Authentication expired. Please login again.');
-        
-        // Clear stored auth data
         await AsyncStorage.removeItem('userToken');
         await AsyncStorage.removeItem('isLoggedIn');
         await AsyncStorage.removeItem('userData');
@@ -162,10 +181,7 @@ export default function DashboardScreen({ navigation }) {
       } else if (error.code === 'NETWORK_ERROR' || !error.response) {
         setError('Network error. Please check your connection.');
       } else {
-        setError(
-          error.response?.data?.message ||
-            'Failed to load data. Please try again.',
-        );
+        setError(error.response?.data?.message || 'Failed to load data.');
       }
 
       setListings([]);
@@ -176,19 +192,14 @@ export default function DashboardScreen({ navigation }) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    
-    // Re-check authentication first
     const isAuth = await checkAuthenticationStatus();
-    
     if (isAuth) {
       await loadListings();
-    } else {
-      console.log('❌ User not authenticated during refresh, skipping listings load');
     }
-    
     setRefreshing(false);
   }, [checkAuthenticationStatus, loadListings]);
 
+  // ---- Pickers ----
   const handleGalleryPick = useCallback(() => {
     return new Promise((resolve, reject) => {
       ImagePicker.openPicker({
@@ -199,11 +210,9 @@ export default function DashboardScreen({ navigation }) {
         compressImageQuality: 0.8,
       })
         .then(image => {
-          console.log('Gallery image:', image);
           resolve({ uri: image.path });
         })
         .catch(error => {
-          console.log('Gallery picker error:', error);
           if (error.code !== 'E_PICKER_CANCELLED') {
             Alert.alert('Error', 'Failed to pick image from gallery');
           }
@@ -222,11 +231,9 @@ export default function DashboardScreen({ navigation }) {
         compressImageQuality: 0.8,
       })
         .then(image => {
-          console.log('Camera image:', image);
           resolve({ uri: image.path });
         })
         .catch(error => {
-          console.log('Camera picker error:', error);
           if (error.code !== 'E_PICKER_CANCELLED') {
             Alert.alert('Error', 'Failed to take photo');
           }
@@ -235,86 +242,92 @@ export default function DashboardScreen({ navigation }) {
     });
   }, []);
 
-  const analyzeImagesManually = useCallback(async (imagePaths) => {
-    try {
-      setIsAnalyzing(true);
-      setAnalysisProgress(t('dashboard.processingImages'));
+  // ---- Analyze (no manual Content-Type) ----
+  const analyzeImagesManually = useCallback(
+    async imagePaths => {
+      try {
+        setIsAnalyzing(true);
+        setAnalysisProgress(t('dashboard.processingImages'));
+        dispatch(clearAnalysis());
 
-      console.log('🗑️ Clearing previous analysis before new analysis...');
-      dispatch(clearAnalysis());
-
-      console.log('🚀 Starting fresh analysis for:', imagePaths);
-
-      console.log('🔄 Using FormData with files method...');
-
-      const formData = new FormData();
-      imagePaths.forEach((imagePath, index) => {
-        formData.append('images[]', {
-          uri: imagePath,
-          type: 'image/jpeg',
-          name: `image_${index}.jpg`,
+        const formData = new FormData();
+        imagePaths.forEach((uri, index) => {
+          formData.append('images[]', {
+            uri,
+            type: 'image/jpeg',
+            name: `image_${index}.jpg`,
+          });
         });
-      });
 
-      const response = await fetch(
-        'https://greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'multipart/form-data',
+        const response = await fetch(
+          'https://greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
+          {
+            method: 'POST',
+            // Let RN set the correct multipart boundary automatically
+            body: formData,
           },
-          body: formData,
-        },
-      );
+        );
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.ok) {
-        setIsAnalyzing(false);
-        setShowOverlay(false);
+        if (response.ok) {
+          setIsAnalyzing(false);
+          setShowOverlay(false);
 
-        navigation.navigate('Details', {
-          images: imagePaths,
-          imageCount: imagePaths.length,
-          analysisData: data,
-          timestamp: Date.now(),
-        });
-        
-        // Reload listings if authenticated
-        if (authenticationStatus === 'authenticated') {
-          loadListings();
+          navigation.navigate('Details', {
+            images: imagePaths,
+            imageCount: imagePaths.length,
+            analysisData: data,
+            timestamp: Date.now(),
+          });
+
+          if (authenticationStatus === 'authenticated') {
+            loadListings();
+          }
+        } else {
+          throw new Error(data?.message || 'Analysis failed');
         }
-      } else {
-        throw new Error(data.message || 'Analysis failed');
+      } catch (error) {
+        console.error('Analysis failed:', error);
+        setIsAnalyzing(false);
+        Alert.alert(
+          t('dashboard.analysisFailed'),
+          error.message || t('dashboard.analysisFailedMessage'),
+          [
+            {
+              text: t('dashboard.retry'),
+              onPress: () => analyzeImagesManually(imagePaths),
+            },
+            { text: t('cancel'), style: 'cancel' },
+          ],
+        );
       }
-    } catch (error) {
-      console.error('🚨 Analysis failed:', error);
-      setIsAnalyzing(false);
-      Alert.alert(
-        t('dashboard.analysisFailed'),
-        error.message || t('dashboard.analysisFailedMessage'),
-        [
-          {
-            text: t('dashboard.retry'),
-            onPress: () => analyzeImagesManually(imagePaths),
-          },
-          {
-            text: t('cancel'),
-            style: 'cancel',
-          },
-        ],
-      );
-    }
-  }, [t, dispatch, setShowOverlay, navigation, authenticationStatus, loadListings]);
+    },
+    [t, dispatch, setShowOverlay, navigation, authenticationStatus, loadListings],
+  );
 
-  const handleImagesComplete = useCallback(async (images) => {
-    console.log('📸 New images selected:', images);
-    setSelectedImages(images);
-    await analyzeImagesManually(images);
-  }, [analyzeImagesManually]);
+  // ---- When user accepts images ----
+  const handleImagesComplete = useCallback(
+    async images => {
+      // Keep raw for UI if you need it elsewhere
+      setSelectedImages(images);
+
+      const imagePaths = normalizeImageList(images);
+      console.log('Normalized paths:', imagePaths);
+
+      try {
+        await saveImagesToGallery(imagePaths);
+      } catch (e) {
+        console.warn('Failed to save images:', e);
+        // optional: Alert the user, but do not block analysis
+      }
+
+      await analyzeImagesManually(imagePaths);
+    },
+    [analyzeImagesManually],
+  );
 
   const handleScanMachinePress = useCallback(() => {
-    console.log('🗑️ Clearing previous analysis data...');
     dispatch(clearAnalysis());
     setSelectedImages([]);
     setIsAnalyzing(false);
@@ -323,25 +336,20 @@ export default function DashboardScreen({ navigation }) {
   }, [dispatch, setShowOverlay]);
 
   const handleCloseOverlay = useCallback(() => {
-    console.log('🔴 User manually closed overlay');
     if (isAnalyzing) {
-      Alert.alert(
-        t('dashboard.analysisInProgress'),
-        t('dashboard.cancelAnalysis'),
-        [
-          { text: t('dashboard.continueAnalysis'), style: 'cancel' },
-          {
-            text: t('cancel'),
-            style: 'destructive',
-            onPress: () => {
-              setIsAnalyzing(false);
-              setShowOverlay(false);
-              setSelectedImages([]);
-              dispatch(clearAnalysis());
-            },
+      Alert.alert(t('dashboard.analysisInProgress'), t('dashboard.cancelAnalysis'), [
+        { text: t('dashboard.continueAnalysis'), style: 'cancel' },
+        {
+          text: t('cancel'),
+          style: 'destructive',
+          onPress: () => {
+            setIsAnalyzing(false);
+            setShowOverlay(false);
+            setSelectedImages([]);
+            dispatch(clearAnalysis());
           },
-        ],
-      );
+        },
+      ]);
     } else {
       setShowOverlay(false);
       setSelectedImages([]);
@@ -349,61 +357,50 @@ export default function DashboardScreen({ navigation }) {
     }
   }, [isAnalyzing, t, setShowOverlay, dispatch]);
 
-  const handleScrollEnd = useCallback((event) => {
-    const contentOffset = event.nativeEvent.contentOffset.x;
-    const cardWidth = scaleWidth(280) + scaleWidth(16); // Card width + margin
-    const pageNum = Math.floor(contentOffset / cardWidth);
+  const handleScrollEnd = useCallback(
+    event => {
+      const contentOffset = event.nativeEvent.contentOffset.x;
+      const cardWidth = scaleWidth(280) + scaleWidth(16);
+      const pageNum = Math.floor(contentOffset / cardWidth);
+      if (pageNum >= 0 && pageNum < listings.length) {
+        setCurrentIndex(pageNum);
+      }
+    },
+    [listings.length],
+  );
 
-    if (pageNum >= 0 && pageNum < listings.length) {
-      setCurrentIndex(pageNum);
-    }
-  }, [listings.length]);
-
-  // FIXED: Enhanced useFocusEffect hook with proper authentication handling
+  // ---- Focus effect ----
   useFocusEffect(
     useCallback(() => {
-      console.log('🔍 Dashboard focused - checking authentication and loading data...');
-      
-      // Check authentication status first
-      checkAuthenticationStatus().then((isAuth) => {
+      checkAuthenticationStatus().then(isAuth => {
         if (isAuth) {
-          console.log('🔐 User is authenticated, loading listings...');
           loadListings();
         } else {
-          console.log('❌ User not authenticated, clearing listings');
           setListings([]);
         }
       });
 
-      // Only auto-open overlay once when the app first loads
       if (!hasAutoOpenedOverlay) {
-        console.log('🚀 Auto-opening overlay for first time');
         setShowOverlay(true);
         setHasAutoOpenedOverlay(true);
       }
     }, [checkAuthenticationStatus, loadListings, hasAutoOpenedOverlay]),
   );
 
-  // All useEffect hooks
-  // Auto-scroll effect for carousel
+  // ---- Effects ----
   useEffect(() => {
     if (listings.length > 1) {
       const interval = setInterval(() => {
         if (carouselRef.current) {
           const nextIndex = (currentIndex + 1) % listings.length;
-          carouselRef.current.scrollToIndex({
-            index: nextIndex,
-            animated: true,
-          });
+          carouselRef.current.scrollToIndex({ index: nextIndex, animated: true });
           setCurrentIndex(nextIndex);
         }
-      }, 4000); // Auto-scroll every 4 seconds
-
+      }, 4000);
       return () => clearInterval(interval);
     }
   }, [currentIndex, listings.length]);
 
-  // Reset when overlay closes
   useEffect(() => {
     if (!showOverlay) {
       setSelectedImages([]);
@@ -412,14 +409,12 @@ export default function DashboardScreen({ navigation }) {
     }
   }, [showOverlay]);
 
-  // Clear analysis data when component mounts
   useEffect(() => {
-    console.log('🔄 Dashboard mounted, clearing any existing analysis data');
     dispatch(clearAnalysis());
   }, [dispatch]);
 
-  // Helper functions (these don't use hooks, so they can be anywhere)
-  const getStatusBadgeStyle = (status) => {
+  // ---- UI helpers ----
+  const getStatusBadgeStyle = status => {
     switch (status?.toLowerCase()) {
       case 'published':
       case 'publish':
@@ -429,13 +424,12 @@ export default function DashboardScreen({ navigation }) {
       case 'sold':
         return { backgroundColor: '#8b5cf6' };
       case 'draft':
-        return { backgroundColor: '#6b7280' };
       default:
         return { backgroundColor: '#6b7280' };
     }
   };
 
-  const getStatusText = (status) => {
+  const getStatusText = status => {
     switch (status?.toLowerCase()) {
       case 'published':
       case 'publish':
@@ -445,18 +439,18 @@ export default function DashboardScreen({ navigation }) {
       case 'sold':
         return t('dashboard.sold');
       case 'draft':
-        return t('dashboard.draft');
       default:
         return t('dashboard.draft');
     }
   };
 
-  const formatPrice = (price) => {
+  const formatPrice = price => {
     if (!price) return '0';
     return parseInt(price).toLocaleString();
+    // consider using Intl.NumberFormat for currency if needed
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = dateString => {
     if (!dateString) return t('dashboard.recently');
     const date = new Date(dateString);
     const now = new Date();
@@ -465,12 +459,10 @@ export default function DashboardScreen({ navigation }) {
 
     if (diffDays === 1) return t('dashboard.yesterday');
     if (diffDays < 7) return t('dashboard.daysAgo', { days: diffDays });
-    if (diffDays < 30)
-      return t('dashboard.weeksAgo', { weeks: Math.ceil(diffDays / 7) });
+    if (diffDays < 30) return t('dashboard.weeksAgo', { weeks: Math.ceil(diffDays / 7) });
 
-    // Format date according to language
-    if (currentLanguage === 'zh-TW') {
-      return date.toLocaleDateString('zh-TW', {
+    if (currentLanguage === 'zh-hant') {
+      return date.toLocaleDateString('zh-hant', {
         year: 'numeric',
         month: 'numeric',
         day: 'numeric',
@@ -486,17 +478,13 @@ export default function DashboardScreen({ navigation }) {
     ).length;
     const pending = listings.filter(item => item.status === 'pending').length;
     const sold = listings.filter(item => item.status === 'sold').length;
-
     return { listed, published, pending, sold };
   };
 
-  // Carousel item renderer
-  const renderCarouselItem = ({ item, index }) => (
+  const renderCarouselItem = ({ item }) => (
     <TouchableOpacity
       style={styles.carouselCard}
-      onPress={() =>
-        navigation.navigate('ProductDetailsById', { productId: item.ID })
-      }
+      onPress={() => navigation.navigate('ProductDetailsById', { productId: item.ID })}
       activeOpacity={0.95}
     >
       <View style={styles.cardImageContainer}>
@@ -516,14 +504,10 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
 
-        {/* Enhanced Status Badge */}
         <View style={[styles.statusBadge, getStatusBadgeStyle(item.status)]}>
-          <Text style={styles.statusBadgeText}>
-            {getStatusText(item.status)}
-          </Text>
+          <Text style={styles.statusBadgeText}>{getStatusText(item.status)}</Text>
         </View>
 
-        {/* Favorite Button */}
         <TouchableOpacity style={styles.favoriteButton}>
           <Icon name="heart" size={18} color="#e11d48" />
         </TouchableOpacity>
@@ -537,19 +521,13 @@ export default function DashboardScreen({ navigation }) {
         <View style={styles.cardMeta}>
           <Icon name="tag" size={14} color="#6366f1" />
           <Text style={styles.cardMetaText} numberOfLines={1}>
-            {item.type
-              ? Array.isArray(item.type)
-                ? item.type.join(', ')
-                : item.type
-              : 'Equipment'}
+            {item.type ? (Array.isArray(item.type) ? item.type.join(', ') : item.type) : 'Equipment'}
           </Text>
         </View>
 
         <View style={styles.cardFooter}>
           <View style={styles.priceContainer}>
-            <Text style={styles.cardPrice}>
-              ${formatPrice(item.price) || '0'}
-            </Text>
+            <Text style={styles.cardPrice}>${formatPrice(item.price) || '0'}</Text>
             <Text style={styles.cardPriceLabel}>{t('dashboard.usd')}</Text>
           </View>
 
@@ -571,10 +549,8 @@ export default function DashboardScreen({ navigation }) {
     </TouchableOpacity>
   );
 
-  // Pagination dots component
   const CarouselPagination = ({ data, currentIndex }) => {
     if (!data || data.length <= 1) return null;
-
     return (
       <View style={styles.paginationContainer}>
         {data.map((_, index) => (
@@ -590,43 +566,33 @@ export default function DashboardScreen({ navigation }) {
     );
   };
 
-  // FIXED: Enhanced empty state with better authentication logic
   const renderEmptyListings = () => {
     const isUserUnauthorized = authenticationStatus === 'unauthenticated' || isUnauthorized;
-    
     return (
       <View style={styles.emptyState}>
         <View style={styles.emptyIconContainer}>
-          <Icon name={isUserUnauthorized ? "lock" : "inbox"} size={32} color="#6366f1" />
+          <Icon name={isUserUnauthorized ? 'lock' : 'inbox'} size={32} color="#6366f1" />
         </View>
         <Text style={styles.emptyTitle}>
           {isUserUnauthorized
             ? t('dashboard.authRequired')
             : error
-            ? t('dashboard.noDataAvailable')
-            : t('dashboard.noMachinesScanned')}
+              ? t('dashboard.noDataAvailable')
+              : t('dashboard.noMachinesScanned')}
         </Text>
         <Text style={styles.emptySubtitle}>
           {isUserUnauthorized
             ? t('dashboard.loginToView')
             : error
-            ? t('dashboard.unableToLoad')
-            : t('dashboard.startScanning')}
+              ? t('dashboard.unableToLoad')
+              : t('dashboard.startScanning')}
         </Text>
         {!error && (
           <TouchableOpacity
             style={styles.emptyButton}
-            onPress={
-              isUserUnauthorized
-                ? () => navigation.navigate('Login')
-                : handleScanMachinePress
-            }
+            onPress={isUserUnauthorized ? () => navigation.navigate('Login') : handleScanMachinePress}
           >
-            <Icon
-              name={isUserUnauthorized ? 'log-in' : 'plus'}
-              size={16}
-              color="#fff"
-            />
+            <Icon name={isUserUnauthorized ? 'log-in' : 'plus'} size={16} color="#fff" />
             <Text style={styles.emptyButtonText}>
               {isUserUnauthorized ? t('logins') : t('dashboard.scanNow')}
             </Text>
@@ -646,28 +612,18 @@ export default function DashboardScreen({ navigation }) {
   };
 
   const renderAnalysisModal = () => (
-    <Modal visible={isAnalyzing} transparent={true} animationType="fade">
+    <Modal visible={isAnalyzing} transparent animationType="fade">
       <View style={styles.analysisOverlay}>
         <View style={styles.analysisModal}>
           <View style={styles.analysisIconContainer}>
             <Icon name="cpu" size={28} color="#6366f1" />
           </View>
-
           <Text style={styles.analysisTitle}>{t('dashboard.aiAnalysis')}</Text>
-
-          <ActivityIndicator
-            size="large"
-            color="#6366f1"
-            style={styles.analysisLoader}
-          />
-
+          <ActivityIndicator size="large" color="#6366f1" style={styles.analysisLoader} />
           <Text style={styles.analysisProgress}>
             {analysisProgress || t('dashboard.processingImages')}
           </Text>
-
-          <Text style={styles.analysisSubText}>
-            {t('dashboard.pleaseWait')}
-          </Text>
+          <Text style={styles.analysisSubText}>{t('dashboard.pleaseWait')}</Text>
         </View>
       </View>
     </Modal>
@@ -675,30 +631,18 @@ export default function DashboardScreen({ navigation }) {
 
   const stats = getStatsFromListings();
 
-  // Early return for loading state - this is OK because all hooks are already called above
   if (!isLanguageInitialized) {
     return (
-      <View
-        style={[
-          styles.container,
-          { justifyContent: 'center', alignItems: 'center' },
-        ]}
-      >
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#6366f1" />
         <Text style={styles.loadingText}>Initializing...</Text>
       </View>
     );
   }
 
-  // Show loading while checking authentication
   if (authenticationStatus === 'checking') {
     return (
-      <View
-        style={[
-          styles.container,
-          { justifyContent: 'center', alignItems: 'center' },
-        ]}
-      >
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#6366f1" />
         <Text style={styles.loadingText}>Checking authentication...</Text>
       </View>
@@ -709,45 +653,30 @@ export default function DashboardScreen({ navigation }) {
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#c0faf5" />
 
-      {/* Show Dashboard only when overlay is closed */}
       {!showOverlay && (
         <View style={styles.container}>
-          {/* Beautiful Header */}
           <View style={styles.header}>
             <View style={styles.headerGradient}>
               <View style={styles.headerContent}>
                 <View style={styles.headerTop}>
                   <View style={styles.headerLeft}>
                     <View style={styles.logoContainer}>
-                      <Icon name="zap" size={20} color="#fff" />
+                      {/* <Icon name="zap" size={20} color="#fff" /> */}
+                      <Image source={require('../../../assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
                     </View>
                     <View>
-                      <Text style={styles.appName}>
-                        {t('dashboard.appName')}
-                      </Text>
-                      <Text style={styles.tagline}>
-                        {t('dashboard.tagline')}
-                      </Text>
+                      <Text style={styles.appName}>{t('dashboard.appName')}</Text>
+                      <Text style={styles.tagline}>{t('dashboard.tagline')}</Text>
                     </View>
                   </View>
                   <View style={styles.headerRight}>
-                    {/* Language Selector Component */}
-                    <LanguageSelector
-                      size="small"
-                      buttonStyle={styles.dashboardLanguageButton}
-                    />
-
-                    {/* Refresh Button */}
+                    <LanguageSelector size="small" buttonStyle={styles.dashboardLanguageButton} />
                     <TouchableOpacity
                       style={styles.notificationButton}
                       onPress={onRefresh}
                       disabled={refreshing}
                     >
-                      <Icon
-                        name={refreshing ? 'loader' : 'refresh-cw'}
-                        size={18}
-                        color="#fff"
-                      />
+                      <Icon name={refreshing ? 'loader' : 'refresh-cw'} size={18} color="#fff" />
                       <View style={styles.notificationDot} />
                     </TouchableOpacity>
                   </View>
@@ -755,10 +684,9 @@ export default function DashboardScreen({ navigation }) {
 
                 <View style={styles.headerBottom}>
                   <Text style={styles.welcomeText}>
-                    {authenticationStatus === 'authenticated' 
+                    {authenticationStatus === 'authenticated'
                       ? t('dashboard.welcomeBack')
-                      : t('dashboard.welcome')
-                    }
+                      : t('dashboard.welcome')}
                   </Text>
                 </View>
               </View>
@@ -777,7 +705,6 @@ export default function DashboardScreen({ navigation }) {
               />
             }
           >
-            {/* Main Actions */}
             <View style={styles.mainActions}>
               <TouchableOpacity
                 style={styles.scanButton}
@@ -788,12 +715,8 @@ export default function DashboardScreen({ navigation }) {
                 <View style={styles.scanButtonIcon}>
                   <Icon name="camera" size={24} color="#fff" />
                 </View>
-                <Text style={styles.scanButtonTitle}>
-                  {t('dashboard.scanMachine')}
-                </Text>
-                <Text style={styles.scanButtonDesc}>
-                  {t('dashboard.scanDescription')}
-                </Text>
+                <Text style={styles.scanButtonTitle}>{t('dashboard.scanMachine')}</Text>
+                <Text style={styles.scanButtonDesc}>{t('dashboard.scanDescription')}</Text>
               </TouchableOpacity>
 
               <View style={styles.actionRow}>
@@ -809,20 +732,17 @@ export default function DashboardScreen({ navigation }) {
                 <TouchableOpacity
                   style={styles.actionButton}
                   activeOpacity={0.9}
-                  onPress={() => navigation.navigate('MyProfile')}
+                  onPress={() => navigation.navigate('Draft')}
                 >
-                  <Icon name="settings" size={20} color="#6366f1" />
-                  <Text style={styles.actionButtonText}>{t('settings')}</Text>
+                  <Icon name="edit" size={20} color="#6366f1" />
+                  <Text style={styles.actionButtonText}>{t('dashboard.draft')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Stats - Only show if authenticated */}
             {authenticationStatus === 'authenticated' && (
               <View style={styles.statsSection}>
-                <Text style={styles.sectionTitle}>
-                  {t('dashboard.yourMachines')}
-                </Text>
+                <Text style={styles.sectionTitle}>{t('dashboard.yourMachines')}</Text>
                 <View style={styles.statsRow}>
                   <View style={styles.simpleStatCard}>
                     <Text style={styles.statNumber}>{stats.listed}</Text>
@@ -844,20 +764,16 @@ export default function DashboardScreen({ navigation }) {
               </View>
             )}
 
-            {/* Enhanced Machine Carousel */}
             <View style={styles.listingsSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>
-                  {authenticationStatus === 'authenticated' 
+                  {authenticationStatus === 'authenticated'
                     ? t('dashboard.recentMachines')
-                    : t('dashboard.sampleMachines')
-                  }
+                    : t('dashboard.sampleMachines')}
                 </Text>
                 {authenticationStatus === 'authenticated' && (
                   <TouchableOpacity onPress={() => navigation.navigate('MyList')}>
-                    <Text style={styles.seeAllText}>
-                      {t('dashboard.viewAll')}
-                    </Text>
+                    <Text style={styles.seeAllText}>{t('dashboard.viewAll')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -865,9 +781,7 @@ export default function DashboardScreen({ navigation }) {
               {isLoadingListings ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color="#6366f1" />
-                  <Text style={styles.loadingText}>
-                    {t('dashboard.loadingMachines')}
-                  </Text>
+                  <Text style={styles.loadingText}>{t('dashboard.loadingMachines')}</Text>
                 </View>
               ) : listings.length > 0 && authenticationStatus === 'authenticated' ? (
                 <View style={styles.carouselWrapper}>
@@ -875,9 +789,7 @@ export default function DashboardScreen({ navigation }) {
                     ref={carouselRef}
                     data={listings.slice(0, 10)}
                     renderItem={renderCarouselItem}
-                    keyExtractor={item =>
-                      item.ID?.toString() || Math.random().toString()
-                    }
+                    keyExtractor={item => item.ID?.toString() || Math.random().toString()}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     pagingEnabled={false}
@@ -896,22 +808,18 @@ export default function DashboardScreen({ navigation }) {
                     })}
                   />
 
-                  {/* Pagination Dots */}
                   <CarouselPagination
                     data={listings.slice(0, 10)}
                     currentIndex={currentIndex}
                   />
 
-                  {/* Manual Navigation Arrows */}
                   {listings.length > 1 && (
                     <View style={styles.navigationArrows}>
                       <TouchableOpacity
                         style={[styles.navArrow, styles.navArrowLeft]}
                         onPress={() => {
                           const prevIndex =
-                            currentIndex === 0
-                              ? listings.length - 1
-                              : currentIndex - 1;
+                            currentIndex === 0 ? listings.length - 1 : currentIndex - 1;
                           carouselRef.current?.scrollToIndex({
                             index: prevIndex,
                             animated: true,
@@ -925,8 +833,7 @@ export default function DashboardScreen({ navigation }) {
                       <TouchableOpacity
                         style={[styles.navArrow, styles.navArrowRight]}
                         onPress={() => {
-                          const nextIndex =
-                            (currentIndex + 1) % listings.length;
+                          const nextIndex = (currentIndex + 1) % listings.length;
                           carouselRef.current?.scrollToIndex({
                             index: nextIndex,
                             animated: true,
@@ -949,12 +856,8 @@ export default function DashboardScreen({ navigation }) {
         </View>
       )}
 
-      {/* Show BottomNav only when overlay is closed */}
-      {!showOverlay && (
-        <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />
-      )}
+      {!showOverlay && <BottomNav setShowOverlay={setShowOverlay} navigation={navigation} />}
 
-      {/* Multi-Image Camera Overlay */}
       {showOverlay && (
         <CameraOverlay
           visible={showOverlay}
@@ -966,22 +869,14 @@ export default function DashboardScreen({ navigation }) {
         />
       )}
 
-      {/* Analysis Progress Modal */}
       {renderAnalysisModal()}
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scaleWidth(12),
-  },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: scaleWidth(12) },
   dashboardLanguageButton: {
     backgroundColor: '#ffffff',
     borderColor: '#0d9488',
@@ -1003,41 +898,26 @@ const styles = StyleSheet.create({
     paddingTop: scaleHeight(5),
     paddingBottom: scaleHeight(5),
   },
-  headerContent: {
-    paddingHorizontal: scaleWidth(20),
-  },
+  headerContent: { paddingHorizontal: scaleWidth(20) },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: scaleHeight(30),
+    marginTop: scaleHeight(50),
     marginBottom: scaleHeight(20),
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoContainer: {
-    width: scaleWidth(40),
-    height: scaleWidth(40),
-    borderRadius: scale(12),
-    backgroundColor: '#33decf',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: scaleWidth(12),
-  },
-  appName: {
-    fontSize: scaleFont(20),
-    fontWeight: '700',
-    color: '#0d9488',
-    fontFamily: 'Poppins-Bold',
-  },
-  tagline: {
-    fontSize: scaleFont(12),
-    color: '#0d9488',
-    fontFamily: 'Poppins-Regular',
-    marginTop: scaleHeight(-2),
-  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  // logoContainer: {
+  //   width: scaleWidth(40),
+  //   height: scaleWidth(40),
+  //   borderRadius: scale(12),
+  //   backgroundColor: '#33decf',
+  //   alignItems: 'center',
+  //   justifyContent: 'center',
+  //   marginRight: scaleWidth(12),
+  // },
+  appName: { fontSize: scaleFont(20), fontWeight: '700', color: '#0d9488', fontFamily: 'Poppins-Bold' },
+  tagline: { fontSize: scaleFont(12), color: '#0d9488', fontFamily: 'Poppins-Regular', marginTop: scaleHeight(-2) },
   notificationButton: {
     width: scaleWidth(40),
     height: scaleWidth(40),
@@ -1058,25 +938,10 @@ const styles = StyleSheet.create({
     borderWidth: scale(2),
     borderColor: '#fff',
   },
-  headerBottom: {
-    paddingBottom: scaleHeight(10),
-  },
-  welcomeText: {
-    fontSize: scaleFont(16),
-    color: '#0d9488',
-    fontFamily: 'Poppins-Regular',
-    lineHeight: scaleHeight(18),
-  },
-
-  scrollContainer: {
-    flex: 1,
-  },
-
-  mainActions: {
-    paddingHorizontal: scaleWidth(20),
-    marginTop: scaleHeight(-20),
-    marginBottom: scaleHeight(24),
-  },
+  headerBottom: { paddingBottom: scaleHeight(10) },
+  welcomeText: { fontSize: scaleFont(16), color: '#0d9488', fontFamily: 'Poppins-Regular', lineHeight: scaleHeight(18) },
+  scrollContainer: { flex: 1 },
+  mainActions: { paddingHorizontal: scaleWidth(20), marginTop: scaleHeight(-20), marginBottom: scaleHeight(24) },
   scanButton: {
     backgroundColor: '#10b981',
     borderRadius: scale(16),
@@ -1099,23 +964,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: scaleHeight(16),
   },
-  scanButtonTitle: {
-    fontSize: scaleFont(20),
-    fontWeight: '700',
-    color: '#fff',
-    fontFamily: 'Poppins-Bold',
-    marginBottom: scaleHeight(4),
-  },
-  scanButtonDesc: {
-    fontSize: scaleFont(14),
-    color: 'rgba(255,255,255,0.8)',
-    fontFamily: 'Poppins-Regular',
-  },
-
-  actionRow: {
-    flexDirection: 'row',
-    gap: scaleWidth(12),
-  },
+  scanButtonTitle: { fontSize: scaleFont(20), fontWeight: '700', color: '#fff', fontFamily: 'Poppins-Bold', marginBottom: scaleHeight(4) },
+  scanButtonDesc: { fontSize: scaleFont(14), color: 'rgba(255,255,255,0.8)', fontFamily: 'Poppins-Regular' },
+  actionRow: { flexDirection: 'row', gap: scaleWidth(12) },
   actionButton: {
     flex: 1,
     backgroundColor: '#fff',
@@ -1128,25 +979,9 @@ const styles = StyleSheet.create({
     shadowRadius: scale(4),
     elevation: 2,
   },
-  actionButtonText: {
-    fontSize: scaleFont(14),
-    fontWeight: '600',
-    color: '#374151',
-    fontFamily: 'Poppins-SemiBold',
-    marginTop: scaleHeight(8),
-  },
-
-  statsSection: {
-    paddingHorizontal: scaleWidth(20),
-    marginBottom: scaleHeight(24),
-  },
-  sectionTitle: {
-    fontSize: scaleFont(18),
-    fontWeight: '700',
-    color: '#111827',
-    fontFamily: 'Poppins-Bold',
-    marginBottom: scaleHeight(16),
-  },
+  actionButtonText: { fontSize: scaleFont(14), fontWeight: '600', color: '#374151', fontFamily: 'Poppins-SemiBold', marginTop: scaleHeight(8) },
+  statsSection: { paddingHorizontal: scaleWidth(20), marginBottom: scaleHeight(24) },
+  sectionTitle: { fontSize: scaleFont(18), fontWeight: '700', color: '#111827', fontFamily: 'Poppins-Bold', marginBottom: scaleHeight(16) },
   statsRow: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -1158,35 +993,11 @@ const styles = StyleSheet.create({
     shadowRadius: scale(4),
     elevation: 2,
   },
-  simpleStatCard: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: scaleFont(24),
-    fontWeight: '800',
-    color: '#111827',
-    fontFamily: 'Poppins-ExtraBold',
-    marginBottom: scaleHeight(4),
-  },
-  statLabel: {
-    fontSize: scaleFont(12),
-    color: '#6b7280',
-    fontFamily: 'Poppins-Medium',
-  },
-
-  // Carousel specific styles
-  listingsSection: {
-    paddingHorizontal: scaleWidth(16),
-    marginBottom: scaleHeight(32),
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: scaleHeight(20),
-    paddingHorizontal: scaleWidth(4),
-  },
+  simpleStatCard: { flex: 1, alignItems: 'center' },
+  statNumber: { fontSize: scaleFont(24), fontWeight: '800', color: '#111827', fontFamily: 'Poppins-ExtraBold', marginBottom: scaleHeight(4) },
+  statLabel: { fontSize: scaleFont(12), color: '#6b7280', fontFamily: 'Poppins-Medium' },
+  listingsSection: { paddingHorizontal: scaleWidth(16), marginBottom: scaleHeight(32) },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scaleHeight(20), paddingHorizontal: scaleWidth(4) },
   seeAllText: {
     fontSize: scaleFont(14),
     color: '#6366f1',
@@ -1197,15 +1008,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0ff',
     borderRadius: scale(20),
   },
-
-  // Carousel wrapper and content
-  carouselWrapper: {
-    position: 'relative',
-  },
-  carouselContent: {
-    paddingHorizontal: scaleWidth(16),
-    paddingBottom: scaleHeight(20),
-  },
+  carouselWrapper: { position: 'relative' },
+  carouselContent: { paddingHorizontal: scaleWidth(16), paddingBottom: scaleHeight(20) },
   carouselCard: {
     backgroundColor: '#fff',
     borderRadius: scale(20),
@@ -1220,19 +1024,8 @@ const styles = StyleSheet.create({
     borderWidth: scale(1),
     borderColor: 'rgba(99, 102, 241, 0.08)',
   },
-
-  // Card components
-  cardImageContainer: {
-    position: 'relative',
-    height: scaleHeight(180),
-    backgroundColor: '#f8fafc',
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-    borderTopLeftRadius: scale(20),
-    borderTopRightRadius: scale(20),
-  },
+  cardImageContainer: { position: 'relative', height: scaleHeight(180), backgroundColor: '#f8fafc' },
+  cardImage: { width: '100%', height: '100%', borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20) },
   cardImagePlaceholder: {
     width: '100%',
     height: '100%',
@@ -1242,13 +1035,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: scale(20),
     borderTopRightRadius: scale(20),
   },
-  placeholderText: {
-    fontSize: scaleFont(12),
-    color: '#94a3b8',
-    marginTop: scaleHeight(8),
-    fontFamily: 'Poppins-Medium',
-  },
-
+  placeholderText: { fontSize: scaleFont(12), color: '#94a3b8', marginTop: scaleHeight(8), fontFamily: 'Poppins-Medium' },
   statusBadge: {
     position: 'absolute',
     top: scaleHeight(12),
@@ -1262,14 +1049,7 @@ const styles = StyleSheet.create({
     shadowRadius: scale(6),
     elevation: 4,
   },
-  statusBadgeText: {
-    color: '#fff',
-    fontSize: scaleFont(11),
-    fontWeight: '700',
-    fontFamily: 'Poppins-Bold',
-    letterSpacing: 0.5,
-  },
-
+  statusBadgeText: { color: '#fff', fontSize: scaleFont(11), fontWeight: '700', fontFamily: 'Poppins-Bold', letterSpacing: 0.5 },
   favoriteButton: {
     position: 'absolute',
     top: scaleHeight(12),
@@ -1286,19 +1066,8 @@ const styles = StyleSheet.create({
     shadowRadius: scale(6),
     elevation: 4,
   },
-
-  cardContent: {
-    padding: scale(16),
-  },
-  cardTitle: {
-    fontSize: scaleFont(16),
-    fontWeight: '700',
-    color: '#111827',
-    fontFamily: 'Poppins-Bold',
-    marginBottom: scaleHeight(8),
-    lineHeight: scaleHeight(22),
-  },
-
+  cardContent: { padding: scale(16) },
+  cardTitle: { fontSize: scaleFont(16), fontWeight: '700', color: '#111827', fontFamily: 'Poppins-Bold', marginBottom: scaleHeight(8), lineHeight: scaleHeight(22) },
   cardMeta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1308,20 +1077,8 @@ const styles = StyleSheet.create({
     paddingVertical: scaleHeight(6),
     borderRadius: scale(12),
   },
-  cardMetaText: {
-    fontSize: scaleFont(13),
-    color: '#64748b',
-    fontFamily: 'Poppins-SemiBold',
-    marginLeft: scaleWidth(6),
-    flex: 1,
-  },
-
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: scaleHeight(12),
-  },
+  cardMetaText: { fontSize: scaleFont(13), color: '#64748b', fontFamily: 'Poppins-SemiBold', marginLeft: scaleWidth(6), flex: 1 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scaleHeight(12) },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -1330,23 +1087,9 @@ const styles = StyleSheet.create({
     paddingVertical: scaleHeight(6),
     borderRadius: scale(8),
   },
-  cardPrice: {
-    fontSize: scaleFont(18),
-    fontWeight: '800',
-    color: '#059669',
-    fontFamily: 'Poppins-ExtraBold',
-  },
-  cardPriceLabel: {
-    fontSize: scaleFont(11),
-    color: '#047857',
-    fontFamily: 'Poppins-Bold',
-    marginLeft: scaleWidth(4),
-  },
-
-  cardActions: {
-    flexDirection: 'row',
-    gap: scaleWidth(8),
-  },
+  cardPrice: { fontSize: scaleFont(18), fontWeight: '800', color: '#059669', fontFamily: 'Poppins-ExtraBold' },
+  cardPriceLabel: { fontSize: scaleFont(11), color: '#047857', fontFamily: 'Poppins-Bold', marginLeft: scaleWidth(4) },
+  cardActions: { flexDirection: 'row', gap: scaleWidth(8) },
   actionIcon: {
     width: scaleWidth(32),
     height: scaleWidth(32),
@@ -1357,7 +1100,6 @@ const styles = StyleSheet.create({
     borderWidth: scale(1),
     borderColor: '#e2e8f0',
   },
-
   cardBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1375,13 +1117,7 @@ const styles = StyleSheet.create({
     paddingVertical: scaleHeight(4),
     borderRadius: scale(6),
   },
-  cardDate: {
-    fontSize: scaleFont(11),
-    color: '#6366f1',
-    fontFamily: 'Poppins-SemiBold',
-  },
-
-  // Pagination dots
+  cardDate: { fontSize: scaleFont(11), color: '#6366f1', fontFamily: 'Poppins-SemiBold' },
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1389,20 +1125,8 @@ const styles = StyleSheet.create({
     paddingVertical: scaleHeight(16),
     gap: scaleWidth(8),
   },
-  paginationDot: {
-    width: scaleWidth(8),
-    height: scaleWidth(8),
-    borderRadius: scale(4),
-    backgroundColor: '#e2e8f0',
-    transition: 'all 0.3s ease',
-  },
-  paginationDotActive: {
-    backgroundColor: '#6366f1',
-    width: scaleWidth(20),
-    borderRadius: scale(4),
-  },
-
-  // Navigation arrows
+  paginationDot: { width: scaleWidth(8), height: scaleWidth(8), borderRadius: scale(4), backgroundColor: '#e2e8f0', transition: 'all 0.3s ease' },
+  paginationDotActive: { backgroundColor: '#6366f1', width: scaleWidth(20), borderRadius: scale(4) },
   navigationArrows: {
     position: 'absolute',
     top: '35%',
@@ -1428,14 +1152,8 @@ const styles = StyleSheet.create({
     borderWidth: scale(1),
     borderColor: '#e2e8f0',
   },
-  navArrowLeft: {
-    marginLeft: scaleWidth(8),
-  },
-  navArrowRight: {
-    marginRight: scaleWidth(8),
-  },
-
-  // Empty state
+  navArrowLeft: { marginLeft: scaleWidth(8) },
+  navArrowRight: { marginRight: scaleWidth(8) },
   emptyState: {
     alignItems: 'center',
     paddingVertical: scaleHeight(56),
@@ -1488,14 +1206,7 @@ const styles = StyleSheet.create({
     shadowRadius: scale(12),
     elevation: 6,
   },
-  emptyButtonText: {
-    color: '#fff',
-    fontSize: scaleFont(16),
-    fontWeight: '700',
-    fontFamily: 'Poppins-Bold',
-  },
-
-  // Loading state
+  emptyButtonText: { color: '#fff', fontSize: scaleFont(16), fontWeight: '700', fontFamily: 'Poppins-Bold' },
   loadingContainer: {
     alignItems: 'center',
     paddingVertical: scaleHeight(48),
@@ -1508,20 +1219,8 @@ const styles = StyleSheet.create({
     shadowRadius: scale(16),
     elevation: 8,
   },
-  loadingText: {
-    fontSize: scaleFont(16),
-    color: '#6366f1',
-    marginTop: scaleHeight(16),
-    fontFamily: 'Poppins-SemiBold',
-  },
-
-  // Analysis modal
-  analysisOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  loadingText: { fontSize: scaleFont(16), color: '#6366f1', marginTop: scaleHeight(16), fontFamily: 'Poppins-SemiBold' },
+  analysisOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center' },
   analysisModal: {
     backgroundColor: '#fff',
     borderRadius: scale(20),
@@ -1543,16 +1242,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: scaleHeight(16),
   },
-  analysisTitle: {
-    fontSize: scaleFont(20),
-    fontWeight: '700',
-    color: '#111827',
-    fontFamily: 'Poppins-Bold',
-    marginBottom: scaleHeight(8),
-  },
-  analysisLoader: {
-    marginVertical: scaleHeight(16),
-  },
+  analysisTitle: { fontSize: scaleFont(20), fontWeight: '700', color: '#111827', fontFamily: 'Poppins-Bold', marginBottom: scaleHeight(8) },
+  analysisLoader: { marginVertical: scaleHeight(16) },
   analysisProgress: {
     fontSize: scaleFont(14),
     color: '#6366f1',
@@ -1561,10 +1252,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-SemiBold',
     marginBottom: scaleHeight(8),
   },
-  analysisSubText: {
-    fontSize: scaleFont(12),
-    color: '#6b7280',
-    textAlign: 'center',
-    fontFamily: 'Poppins-Regular',
+  analysisSubText: { fontSize: scaleFont(12), color: '#6b7280', textAlign: 'center', fontFamily: 'Poppins-Regular' },
+  logoContainer: {
+    width: scaleWidth(35),
+    height: scaleWidth(35),
+    borderRadius: scale(12),
+    // backgroundColor: '#33decf', // optional; remove if you don't want a colored box
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: scaleWidth(12),
+    overflow: 'hidden', // ensures the image respects rounded corners
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
 });

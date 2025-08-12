@@ -469,7 +469,8 @@ export const apiService = {
     apiService.post('/analize_process_images', imageData),
 
   // Category methods
-  getCategories: () => apiService.get('/categories'),
+getCategories: (currentLanguage) =>
+  apiService.get('/categories', { params: { language: currentLanguage } }),
 
   getSubCategories: parentId => {
     return apiService.get('/subcategories', {
@@ -498,7 +499,7 @@ export const apiService = {
   getLocations: () => apiService.get('/locations'),
 
   // Auction methods
-  getAuctionGroups: () => apiService.get('/auction-groups'),
+  getAuctionGroups: (currentLanguage) => apiService.get('/auction-groups',{ params: { language: currentLanguage } }),
   updateListingStatus: async (productId, status) => {
   try {
     console.log(`📤 Updating listing status: ID ${productId} to "${status}"`);
