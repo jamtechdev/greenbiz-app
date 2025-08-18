@@ -284,7 +284,7 @@ export default function EditProductScreen({ route, navigation }) {
   const fetchLocations = async () => {
     try {
       setLoadingLocations(true);
-      const response = await apiService.getLocations();
+      const response = await apiService.getLocations(currentLanguage);
       
       if (response.data) {
         const locationList = Array.isArray(response.data)

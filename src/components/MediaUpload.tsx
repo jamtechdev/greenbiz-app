@@ -1,3 +1,4 @@
+import { t } from 'i18next';
 import React, { useState } from 'react';
 import {
   View,
@@ -22,9 +23,9 @@ try {
   documentPicker = null;
 }
 
-const DocumentsUploadComponent = ({ 
-  onFilesSelected, 
-  uploadedFiles = [], 
+const DocumentsUploadComponent = ({
+  onFilesSelected,
+  uploadedFiles = [],
   maxFiles = 10,
   style,
   is_editing
@@ -52,7 +53,7 @@ const DocumentsUploadComponent = ({
   // Open document picker
   const openDocumentPicker = async () => {
     console.log('📄 Opening document picker');
-    
+
     if (!documentPicker) {
       Alert.alert(
         'Document Picker Not Available',
@@ -64,7 +65,7 @@ const DocumentsUploadComponent = ({
 
     try {
       setIsUploading(true);
-      
+
       console.log('📄 Document picker config:', {
         type: documentConfig.documentTypes,
         allowMultiSelection: true,
@@ -95,7 +96,7 @@ const DocumentsUploadComponent = ({
       handleFileSelected(files);
     } catch (error) {
       console.error('📄 Document picker error:', error);
-      
+
       // Check if user cancelled (for your package)
       if (error.code === 'DOCUMENT_PICKER_CANCELED') {
         console.log('Document picker cancelled');
@@ -110,7 +111,7 @@ const DocumentsUploadComponent = ({
   // Handle file selection and validation
   const handleFileSelected = (files) => {
     console.log('🔄 Processing selected files:', files);
-    
+
     const validatedFiles = [];
     const errors = [];
 
@@ -160,7 +161,7 @@ const DocumentsUploadComponent = ({
   // Get file icon and color based on type
   const getFileDisplay = (file) => {
     const extension = file.name.split('.').pop()?.toLowerCase();
-    
+
     switch (extension) {
       case 'pdf':
         return { icon: 'file-text', color: '#dc2626', backgroundColor: '#fef2f2' };
@@ -201,7 +202,7 @@ const DocumentsUploadComponent = ({
           <View style={[styles.fileIcon, { backgroundColor: display.backgroundColor }]}>
             <Icon name={display.icon} size={16} color={display.color} />
           </View>
-          
+
           <View style={styles.fileDetails}>
             <Text style={styles.fileName} numberOfLines={1}>
               {item.name || 'Unknown file'}
@@ -241,16 +242,17 @@ const DocumentsUploadComponent = ({
         </View>
         <View style={styles.uploadContent}>
           <Text style={[styles.uploadTitle, { color: documentConfig.color }]}>
-            Add Documents
+            {t('media.addDocuments')}
           </Text>
           <Text style={styles.uploadSubtitle}>
-            PDF, DOC, XLS files
+            {t('media.supportedFileTypes')}
+
           </Text>
         </View>
-        <Icon 
-          name="plus" 
-          size={16} 
-          color={isDisabled ? '#9ca3af' : documentConfig.color} 
+        <Icon
+          name="plus"
+          size={16}
+          color={isDisabled ? '#9ca3af' : documentConfig.color}
         />
       </TouchableOpacity>
 
@@ -259,10 +261,11 @@ const DocumentsUploadComponent = ({
         <View style={styles.fileList}>
           <View style={styles.fileListHeader}>
             <Text style={styles.fileListTitle}>
-              Uploaded Files ({uploadedFiles.length}/{maxFiles})
+              {t('media.uploadedFiles')}
+              ({uploadedFiles.length}/{maxFiles})
             </Text>
           </View>
-          
+
           <FlatList
             data={uploadedFiles}
             renderItem={renderFileItem}
@@ -276,16 +279,18 @@ const DocumentsUploadComponent = ({
       {/* Upload Progress/Status */}
       {isUploading && (
         <View style={styles.uploadingContainer}>
-          <Text style={styles.uploadingText}>Selecting files...</Text>
+          <Text style={styles.uploadingText}>            {t('media.selectingFiles')}
+            ...</Text>
         </View>
       )}
 
       {/* File Count Info */}
       <View style={styles.infoContainer}>
         <Text style={styles.infoText}>
-          {uploadedFiles.length === 0 
-            ? `You can upload up to ${maxFiles} files`
-            : `${uploadedFiles.length} of ${maxFiles} files uploaded`
+          {uploadedFiles.length === 0
+            ? `${t("media.youCanUploadUpTo")} ${maxFiles} ${t("media.files")}`
+            : `${uploadedFiles.length} of ${maxFiles} ${t('media.filesUploaded')}
+`
           }
         </Text>
       </View>

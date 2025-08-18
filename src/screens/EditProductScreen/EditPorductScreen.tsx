@@ -28,6 +28,8 @@ import DocumentsUploadComponent from '../../components/MediaUpload';
 import BottomNav from '../../components/BottomNavbar';
 import CustomAlert from '../../components/CustomAlert';
 import CustomDateTimePicker from '../../components/CustomDateTimePicker';
+import { useSelector } from 'react-redux';
+import { selectCurrentLanguage } from '../../store/slices/languageSlice';
 
 const { width, height } = Dimensions.get('window');
 
@@ -111,7 +113,7 @@ export default function EditProductScreen({ route, navigation }) {
   const [mediaFiles, setMediaFiles] = useState([]);
   const [existingDocuments, setExistingDocuments] = useState([]);
   const [documentsToDelete, setDocumentsToDelete] = useState([]);
-
+  const currentLanguage = useSelector(selectCurrentLanguage);
   // Form fields state
   const [fields, setFields] = useState({});
   
@@ -406,8 +408,8 @@ export default function EditProductScreen({ route, navigation }) {
   const fetchLocations = async () => {
     try {
       setLoadingLocations(true);
-      const response = await apiService.getLocations();
-      
+      const response = await apiService.getLocations(currentLanguage);
+      console.log(response.data,'ashgk')
       if (response.data) {
         const locationList = Array.isArray(response.data)
           ? response.data
@@ -1418,6 +1420,24 @@ export default function EditProductScreen({ route, navigation }) {
                 />
               </View>
 
+              <View style={styles.fieldRow}>
+                <View style={styles.fieldHalf}>
+                  <View style={styles.fieldContainer}>
+                    <View style={styles.fieldHeader}>
+                      <Icon name="calendar" size={16} color={COLORS.primary} />
+                      <Text style={styles.fieldLabel}>{t('editProduct.fields.startDate')}</Text>
+                    </View>
+                    <CustomDateTimePicker
+                      value={fields.auction_start_time?.value ? new Date(fields.auction_start_time.value) : null}
+                      onChange={(iso) => onChangeText('auction_start_time', iso || '')}
+                      textStyle={styles.datePickerText}
+                    />
+                    {validationErrors.auction_start_time && (
+                      <Text style={styles.errorText}>{validationErrors.auction_start_time}</Text>
+                    )}
+                  </View>
+                </View>
+              </View>
               <View style={styles.fieldRow}>
                 <View style={styles.fieldHalf}>
                   <View style={styles.fieldContainer}>

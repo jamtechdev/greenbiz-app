@@ -22,6 +22,7 @@ import { apiService } from '../api/axiosConfig';
 import { scale, scaleFont, scaleHeight, scaleWidth } from '../utils/resposive';
 import { useSelector } from 'react-redux';
 import { selectCurrentLanguage } from '../store/slices/languageSlice';
+import { t } from 'i18next';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -308,7 +309,7 @@ export default function DetailModal({
   const fetchLocations = async () => {
     try {
       setLoadingLocations(true);
-      const response = await apiService.getLocations();
+      const response = await apiService.getLocations(currentLanguage);
 
       console.log('Locations API Response:', response.data);
 
@@ -575,7 +576,7 @@ export default function DetailModal({
     if (fields.product_cat && fields.product_cat.value) {
       return (
         <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Category *</Text>
+          <Text style={styles.label}>{t('editProduct.fields.category')} *</Text>
           <View style={styles.readOnlyField}>
             <Text style={styles.readOnlyText} numberOfLines={1}>
               {fields.product_cat.value}
@@ -588,7 +589,7 @@ export default function DetailModal({
     // Otherwise show dropdown
     return (
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Category *</Text>
+        <Text style={styles.label}>{t('editProduct.fields.category')} *</Text>
         <CustomDropdown
           options={categories.map(cat => cat.name)}
           selectedValue={
@@ -596,8 +597,8 @@ export default function DetailModal({
             (categories.length > 0 ? categories[0].name : 'Electronics')
           }
           onSelect={handleCategoryChange}
-          placeholder="Select category"
-          label="Product Category"
+          placeholder={t('editProduct.fields.category')}
+          label={t('editProduct.fields.category')}
           loading={loadingCategories}
           hasError={!!validationErrors.parent_category}
         />
@@ -612,7 +613,7 @@ export default function DetailModal({
     if (fields.product_subcat && fields.product_subcat.value) {
       return (
         <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Sub Category</Text>
+          <Text style={styles.label}>{t('editProduct.fields.subCategory')}</Text>
           <View style={styles.readOnlyField}>
             <Text style={styles.readOnlyText} numberOfLines={1}>
               {fields.product_subcat.value}
@@ -625,13 +626,13 @@ export default function DetailModal({
     // Otherwise show dropdown
     return (
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Sub Category</Text>
+        <Text style={styles.label}>{t('editProduct.fields.subCategory')}</Text>
         <CustomDropdown
           options={subCategories}
           selectedValue={getSubCategoryValue()}
           onSelect={handleSubCategoryChange}
-          placeholder="Select subcategory"
-          label="Sub Category"
+          placeholder={t('editProduct.fields.subCategory')}
+          label={t('editProduct.fields.subCategory')}
           loading={loadingSubCategories}
           disabled={!selectedCategoryId && !fields.product_cat?.value}
         />
@@ -646,7 +647,7 @@ export default function DetailModal({
     const errors = validateFields(formType);
     return Object.keys(errors).length > 0;
   };
-
+  console.log(fields,'filedsfiledsfiledsfiledsfiledsfileds')
   return (
     <Modal
       visible={showReviewModal}
@@ -664,9 +665,9 @@ export default function DetailModal({
                 <Icon name="edit-3" size={18} color="#6366f1" />
               </View>
               <View>
-                <Text style={styles.modalTitle}>Review & Submit</Text>
+                <Text style={styles.modalTitle}>{t('review.reviewAndSubmit', 'Review & Submit')}</Text>
                 <Text style={styles.modalSubtitle}>
-                  Finalize your listing details
+                 {t('review.finalizeDetails','Finalize your listing details')}
                 </Text>
               </View>
             </View>
@@ -691,11 +692,11 @@ export default function DetailModal({
                 <View style={styles.sectionIcon}>
                   <Icon name="info" size={16} color="#6366f1" />
                 </View>
-                <Text style={styles.sectionTitle}>Basic Information</Text>
+                <Text style={styles.sectionTitle}>{t('editProduct.sections.basicInformation')}</Text>
               </View>
 
               <View style={styles.fieldContainer}>
-                <Text style={styles.label}>Product Title *</Text>
+                <Text style={styles.label}>{t('editProduct.fields.productTitle')} *</Text>
                 <TextInput
                   style={[
                     styles.input,
@@ -711,7 +712,7 @@ export default function DetailModal({
 
               <View style={styles.row}>
                 <View style={[styles.fieldContainer, styles.halfWidth]}>
-                  <Text style={styles.label}>Brand</Text>
+                  <Text style={styles.label}>{t('editProduct.fields.brand')}</Text>
                   <TextInput
                     style={styles.input}
                     value={fields.brand?.value || ''}
@@ -722,7 +723,7 @@ export default function DetailModal({
                 </View>
 
                 <View style={[styles.fieldContainer, styles.halfWidth]}>
-                  <Text style={styles.label}>Model</Text>
+                  <Text style={styles.label}>{t('editProduct.fields.model')}</Text>
                   <TextInput
                     style={styles.input}
                     value={fields.model?.value || ''}
@@ -734,7 +735,7 @@ export default function DetailModal({
               </View>
 
               <View style={styles.fieldContainer}>
-                <Text style={styles.label}>Description *</Text>
+                <Text style={styles.label}>{t('editProduct.fields.description')} *</Text>
                 <TextInput
                   style={[
                     styles.input,
@@ -756,29 +757,29 @@ export default function DetailModal({
 
               {/* Dimensions */}
               <View style={styles.fieldContainer}>
-                <Text style={styles.label}>Dimensions (L x W x H)</Text>
+                <Text style={styles.label}>{t('editProduct.fields.dimensions')} </Text>
                 <TextInput
                   style={styles.input}
                   value={fields.dimensions?.value || ''}
                   onChangeText={text => handleFieldChange('dimensions', text)}
-                  placeholder="e.g., 120 x 80 x 60 cm"
+                  placeholder={t('editProduct.placeholders.enterDimensions')}
                   placeholderTextColor="#9ca3af"
                 />
               </View>
 
               {/* CO2 Emission */}
               <View style={styles.fieldContainer}>
-                <Text style={styles.label}>CO2 Emission (kg/year)</Text>
+                <Text style={styles.label}>{t('editProduct.fields.co2Emission')}</Text>
                 <TextInput
                   style={styles.input}
                   keyboardType="decimal-pad"
                   value={fields.co2_emission?.value || ''}
                   onChangeText={text => handleFieldChange('co2_emission', text)}
-                  placeholder="Enter estimated CO2 emission"
+                  placeholder={t('editProduct.placeholders.enterCO2Emission')}
                   placeholderTextColor="#9ca3af"
                 />
                 <Text style={styles.fieldHint}>
-                  Optional: Environmental impact information
+                  {t('media.environmentalImpactInfo')}
                 </Text>
               </View>
             </View>
@@ -791,12 +792,12 @@ export default function DetailModal({
                 >
                   <Icon name="dollar-sign" size={16} color="#059669" />
                 </View>
-                <Text style={styles.sectionTitle}>Pricing Information</Text>
+                <Text style={styles.sectionTitle}>{t('editProduct.sections.pricingInformation')}</Text>
               </View>
 
               <View style={styles.row}>
                 <View style={[styles.fieldContainer, styles.halfWidth]}>
-                  <Text style={styles.label}>Currency</Text>
+                  <Text style={styles.label}>{t('editProduct.fields.currency')}</Text>
                   <CustomDropdown
                     options={[
                       'USD ($)',
@@ -832,7 +833,7 @@ export default function DetailModal({
                   />
                 </View>
                 <View style={[styles.fieldContainer, styles.halfWidth]}>
-                  <Text style={styles.label}>Price *</Text>
+                  <Text style={styles.label}>{t('editProduct.fields.price')} *</Text>
                   <TextInput
                     style={[
                       styles.input,
@@ -859,7 +860,7 @@ export default function DetailModal({
                 >
                   <Icon name="package" size={16} color="#f59e0b" />
                 </View>
-                <Text style={styles.sectionTitle}>Listing Type</Text>
+                <Text style={styles.sectionTitle}>{t('editProduct.sections.productType')}</Text>
               </View>
 
               <View style={styles.productTypeContainer}>
@@ -897,10 +898,10 @@ export default function DetailModal({
                           styles.productTypeTextActive,
                       ]}
                     >
-                      Marketplace
+                      {t('editProduct.productTypes.marketplace')}
                     </Text>
                     <Text style={styles.productTypeDescription}>
-                      Sell at fixed price
+                     {t('editProduct.productTypes.marketplaceDesc')}
                     </Text>
                   </View>
                   {productType === 'Marketplace' && (
@@ -948,10 +949,10 @@ export default function DetailModal({
                           styles.productTypeTextActive,
                       ]}
                     >
-                      Auction
+                      {t('editProduct.productTypes.auction')}
                     </Text>
                     <Text style={styles.productTypeDescription}>
-                      Let buyers bid
+                      {t('editProduct.productTypes.auctionDesc')}
                     </Text>
                   </View>
                   {productType === 'Auction' && (
@@ -969,7 +970,7 @@ export default function DetailModal({
                 >
                   <Icon name="map-pin" size={16} color="#dc2626" />
                 </View>
-                <Text style={styles.sectionTitle}>Location & Category</Text>
+                <Text style={styles.sectionTitle}>{t('editProduct.sections.locationCategory')}</Text>
               </View>
 
               <View style={styles.row}>
@@ -983,7 +984,7 @@ export default function DetailModal({
               </View>
 
               <View style={styles.fieldContainer}>
-                <Text style={styles.label}>Location *</Text>
+                <Text style={styles.label}>{t('editProduct.fields.location')} *</Text>
                 <CustomDropdown
                   options={locations}
                   selectedValue={
@@ -1002,8 +1003,8 @@ export default function DetailModal({
                           );
                     handleFieldChange('item_location', stringValue);
                   }}
-                  placeholder="Select location"
-                  label="Item Location"
+                  placeholder={t('editProduct.fields.location')}
+                  label={t('editProduct.fields.location')}
                   loading={loadingLocations}
                   hasError={!!validationErrors.item_location}
                 />
@@ -1019,7 +1020,7 @@ export default function DetailModal({
                 >
                   <Icon name="file" size={16} color="#0284c7" />
                 </View>
-                <Text style={styles.sectionTitle}>Media & Documents</Text>
+                <Text style={styles.sectionTitle}>{t('editProduct.sections.documentsMedia')}</Text>
               </View>
 
               <MediaUploadComponent
@@ -1039,11 +1040,11 @@ export default function DetailModal({
                   >
                     <Icon name="clock" size={16} color="#7c3aed" />
                   </View>
-                  <Text style={styles.sectionTitle}>Auction Settings</Text>
+                  <Text style={styles.sectionTitle}>{t('editProduct.sections.auctionSettings')}</Text>
                 </View>
 
                 <View style={styles.fieldContainer}>
-                  <Text style={styles.label}>Auction Group</Text>
+                  <Text style={styles.label}>{t('editProduct.fields.auctionGroup')}</Text>
                   {showCustomAuctionGroup ? (
                     <View style={styles.customGroupContainer}>
                       <TextInput
@@ -1091,13 +1092,14 @@ export default function DetailModal({
                     />
                   )}
                   <Text style={styles.fieldHint}>
-                    Group similar items together for better visibility
+                    {t('other.groupSimilarItemsHint','Group similar items together for better visibility')}
+                    
                   </Text>
                 </View>
 
                 {/* Currency for Auction */}
                 <View style={styles.fieldContainer}>
-                  <Text style={styles.label}>Auction Currency *</Text>
+                  <Text style={styles.label}>{t('editProduct.fields.auctionCurrency')} *</Text>
                   <View style={styles.currencyInfoContainer}>
                     <CustomDropdown
                       options={[
@@ -1132,7 +1134,8 @@ export default function DetailModal({
                     />
                     {fields.currency?.value && (
                       <Text style={styles.currencyInfo}>
-                        Based on listing currency: {fields.currency.value}
+                         
+                        {t('other.basedOnListingCurrency','Based on listing currency')}: {fields.currency.value}
                       </Text>
                     )}
                   </View>
@@ -1141,7 +1144,7 @@ export default function DetailModal({
 
                 <View style={styles.row}>
                   <View style={[styles.fieldContainer, styles.halfWidth]}>
-                    <Text style={styles.label}>Start Date *</Text>
+                    <Text style={styles.label}>{t('editProduct.fields.startDate')} *</Text>
                     <View
                       style={[
                         styles.datePickerWrapper,
@@ -1165,7 +1168,7 @@ export default function DetailModal({
                   </View>
 
                   <View style={[styles.fieldContainer, styles.halfWidth]}>
-                    <Text style={styles.label}>End Date *</Text>
+                    <Text style={styles.label}>{t('editProduct.fields.endDate')} *</Text>
                     <View
                       style={[
                         styles.datePickerWrapper,
@@ -1191,7 +1194,7 @@ export default function DetailModal({
 
                 <View style={styles.row}>
                   <View style={[styles.fieldContainer, styles.halfWidth]}>
-                    <Text style={styles.label}>Starting Bid Price *</Text>
+                    <Text style={styles.label}>{t('editProduct.fields.startingBidPrice')} *</Text>
                     <TextInput
                       style={[
                         styles.input,
@@ -1208,12 +1211,13 @@ export default function DetailModal({
                     />
                     {renderFieldError('auction_start_price')}
                     <Text style={styles.fieldHint}>
-                      Set a competitive starting price to attract bidders
+                      {t('other.startingPriceHint','Set a competitive starting price to attract bidders')}
+                      
                     </Text>
                   </View>
 
                   <View style={[styles.fieldContainer, styles.halfWidth]}>
-                    <Text style={styles.label}>Reserve Price</Text>
+                    <Text style={styles.label}>{t('editProduct.fields.reservePrice')}</Text>
                     <TextInput
                       style={[
                         styles.input,
@@ -1224,12 +1228,13 @@ export default function DetailModal({
                       onChangeText={text =>
                         handleFieldChange('reserve_price', text)
                       }
-                      placeholder="Enter reserve price"
+                      placeholder={t('editProduct.placeholders.enterPrice')}
                       placeholderTextColor="#9ca3af"
                     />
                     {renderFieldError('reserve_price')}
                     <Text style={styles.fieldHint}>
-                      Minimum price you'll accept for the item
+                       {t('other.minAcceptablePriceLabel','Minimum price you will accept for the item')}
+                      
                     </Text>
                   </View>
                 </View>
@@ -1265,16 +1270,16 @@ export default function DetailModal({
                 >
                   <Icon name="file-text" size={16} color="#0284c7" />
                 </View>
-                <Text style={styles.sectionTitle}>Listing Summary</Text>
+                <Text style={styles.sectionTitle}>{t('review.listingSummary', 'Listing Summary')}</Text>
               </View>
 
               <View style={styles.summaryCard}>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Type:</Text>
+                  <Text style={styles.summaryLabel}>{t('review.type', 'Type')}:</Text>
                   <Text style={styles.summaryValue}>{productType}</Text>
                 </View>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Price:</Text>
+                  <Text style={styles.summaryLabel}>{t('review.price','Price')}:</Text>
                   <Text style={styles.summaryValue}>
                     {fields.currency?.value}{' '}
                     {parseFloat(
@@ -1285,7 +1290,7 @@ export default function DetailModal({
                 {productType === 'Auction' && (
                   <>
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Starting Bid:</Text>
+                      <Text style={styles.summaryLabel}>{t('editProduct.fields.startingBidPrice')}:</Text>
                       <Text style={styles.summaryValue}>
                         {fields.auction_currency?.value}{' '}
                         {parseFloat(
@@ -1295,7 +1300,7 @@ export default function DetailModal({
                     </View>
                     {fields.reserve_price?.value && (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Reserve Price:</Text>
+                        <Text style={styles.summaryLabel}>{t('editProduct.fields.reservePrice')}:</Text>
                         <Text style={styles.summaryValue}>
                           {fields.auction_currency?.value}{' '}
                           {parseFloat(
@@ -1307,14 +1312,14 @@ export default function DetailModal({
                   </>
                 )}
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Category:</Text>
+                  <Text style={styles.summaryLabel}>{t('review.category','Category')}:</Text>
                   <Text style={styles.summaryValue}>
                     {getCategoryValue()}
                     {getSubCategoryValue() && ` / ${getSubCategoryValue()}`}
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Location:</Text>
+                  <Text style={styles.summaryLabel}>{t('review.location','Location')}:</Text>
                   <Text style={styles.summaryValue}>
                     {fields.item_location?.value}
                   </Text>
@@ -1360,8 +1365,8 @@ export default function DetailModal({
                 ]}
               >
                 {isSubmitting && submissionType === 'save_later'
-                  ? 'Saving...'
-                  : 'Save Draft'}
+                  ? `${t('review.saving', 'Saving')}..`
+                  : `${t('review.saveDraft', 'Save Draft')}`}
               </Text>
             </TouchableOpacity>
 
@@ -1389,8 +1394,8 @@ export default function DetailModal({
                   ]}
                 >
                   {isSubmitting && submissionType === 'submit_market'
-                    ? 'Submitting...'
-                    : 'Marketplace'}
+                    ? `${t('review.submitting', 'Submitting')}..`
+                    : `${t('review.marketplace', 'Marketplace')}`}
                 </Text>
               </TouchableOpacity>
             )}

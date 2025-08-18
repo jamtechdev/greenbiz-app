@@ -71,7 +71,7 @@
     },
     "profile": {
         "myProfile": "我的個人資料",
-        "profile" :"简介",
+        "profile": "简介",
         "editDetails": "編輯您的詳細資料",
         "manageAccount": "管理您的帳戶",
         "loadingProfile": "正在載入您的個人資料...",
@@ -200,7 +200,7 @@
             "marketplaceDesc": "固定價格出售",
             "auction": "拍賣",
             "auctionDesc": "讓買家競標",
-            "market" : "市場"
+            "market": "市場"
         },
         "documents": {
             "defaultName": "產品_{{productId}}_文件_{{index}}.pdf",
@@ -502,5 +502,50 @@
             "emailExists": "此電子郵件已有帳號存在。",
             "networkError": "網路錯誤。請檢查您的網路連線。"
         }
+    },
+    "market": {
+        "priceTrends": "市場價格趨勢",
+        "minimum": "最低",
+        "maximumPrice": "最高價格",
+        "averagePrice": "平均價格",
+        "aboutThisEquipment": "關於此設備",
+        "co2": "CO₂",
+        "weight": "重量",
+        "dimension": "尺寸",
+        "submitListing": "提交刊登",
+        "price": "價格",
+        "keyMetrics": "關鍵指標",
+        "last12Months": "過去 12 個月"
+    },
+    "review": {
+        "reviewAndSubmit": "檢閱並提交",
+        "finalizeDetails": "完成您的清單詳細資訊",
+        "listingSummary": "清單摘要",
+        "type": "類型",
+        "price": "價格",
+        "location": "位置",
+        "category": "類別",
+        "saving": "儲存中...",
+        "saveDraft": "儲存草稿",
+        "submitting": "提交中...",
+        "marketplace": "市場"
+    },
+    "media": {
+        "addDocuments": "新增文件",
+        "supportedFileTypes": "支援 PDF、DOC、XLS 檔案",
+        "uploadedFiles": "已上傳的文件",
+        "selectingFiles": "選擇文件中",
+        "maxFilesInfo": "您最多可以上傳 {{maxFiles}} 個文件",
+        "filesUploaded": "已上傳 {{count}} 個文件",
+        "youCanUploadUpTo": "您最多可以上傳",
+        "files": "個文件",
+        "environmentalImpactInfo": "（可選）環境影響資訊"
+    },
+    "other": {
+        "minAcceptablePriceLabel": "您可接受的最低價格",
+        "startingPriceHint": "設定有競爭力的起標價以吸引投標者",
+        "basedOnListingCurrency": "以刊登貨幣為準",
+        "groupSimilarItemsHint": "將相似項目分組以提升可見度",
+        "selectDateTime": "選擇日期與時間"
     }
 }

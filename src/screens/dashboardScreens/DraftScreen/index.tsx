@@ -309,12 +309,12 @@ export default function DraftScreen({ navigation }) {
               style={styles.image}
               resizeMode="contain"
             />
-            <View style={styles.overlayRow}>
+            {/* <View style={styles.overlayRow}>
               <View style={styles.overlayBadge}>
                 <Icon name="eye" size={12} color="#fff" />
                 <Text style={styles.overlayText}>0</Text>
               </View>
-            </View>
+            </View> */}
           </View>
 
           <View style={styles.cardBody}>

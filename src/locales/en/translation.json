@@ -499,6 +499,50 @@
             "checkInformation": "Please check your information and try again.",
             "emailExists": "An account with this email already exists.",
             "networkError": "Network error. Please check your internet connection."
+        },
+        "market": {
+            "priceTrends": "Market Price Trends",
+            "minimum": "Minimum",
+            "maximumPrice": "Maximum Price",
+            "averagePrice": "Average Price",
+            "aboutThisEquipment": "About this equipment",
+            "co2": "CO₂",
+            "weight": "Weight",
+            "dimension": "Dimension",
+            "submitListing": "Submit Listing",
+            "price": "Price",
+            "keyMetrics": "Key Metrics",
+            "last12Months": "Last 12 Months"
+        },
+        "review": {
+            "reviewAndSubmit": "Review & Submit",
+            "finalizeDetails": "Finalize your lisiting details",
+            "listingSummary": "Listing Summary",
+            "type": "Type",
+            "price": "Price",
+            "location": "Location",
+            "category": "Category",
+            "saving": "Saving...",
+            "saveDraft": "Save Draft",
+            "submitting": "Submitting...",
+            "marketplace": "Marketplace"
         }
+    },
+    "media": {
+        "addDocuments": "Add Documents",
+        "supportedFileTypes": "PDF, DOC, XLS files",
+        "uploadedFiles": "Uploaded Files",
+        "selectingFiles": "Selecting files",
+        "youCanUploadUpTo": "You can upload up to",
+        "files": "files",
+        "filesUploaded": "{{count}} files uploaded",
+        "environmentalImpactInfo": "Optional: Environmental impact information"
+    },
+       "other" : {
+        "minAcceptablePriceLabel": "Minimum price you'll accept for the item",
+        "startingPriceHint": "Set a competitive starting price to attract bidders",
+         "basedOnListingCurrency": "Based on listing currency",
+         "groupSimilarItemsHint": "Group similar items together for better visibility",
+         "selectDateTime": "Select date & time"
     }
 }

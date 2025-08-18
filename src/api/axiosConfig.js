@@ -496,7 +496,7 @@ getCategories: (currentLanguage) =>
   },
   deleteListing: id => apiClient.post(`/product/delete?product_id=${id}`),
   // Location methods
-  getLocations: () => apiService.get('/locations'),
+  getLocations: (currentLanguage) => apiService.get('/countries',{ params: { language: currentLanguage } }),
 
   // Auction methods
   getAuctionGroups: (currentLanguage) => apiService.get('/auction-groups',{ params: { language: currentLanguage } }),

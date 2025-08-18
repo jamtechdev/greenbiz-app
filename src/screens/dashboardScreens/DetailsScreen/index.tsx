@@ -26,6 +26,8 @@ import { useCustomAlert } from '../../../hook/useCustomAlert';
 import calculateMarketStats from '../../../utils/calculateMarketStats';
 import EnhancedMarketAnalysis from '../../../components/EnhancedMarketAnalysis';
 import { scaleFont, scaleHeight, scaleWidth } from '../../../utils/resposive';
+import MarketPriceTrendsCard from '../../../components/MarketPriceTrendsCard';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 
@@ -64,7 +66,7 @@ const CONDITIONS = [
   'Used, Needs Minor Repair',
 ];
 
-const OPERATION_STATUS = ['Running', 'Idle', 'Down' ,"Functional"];
+const OPERATION_STATUS = ['Running', 'Idle', 'Down', "Functional"];
 
 const CURRENCIES = [
   'USD ($)',
@@ -85,6 +87,7 @@ export default function DetailsScreen({ route, navigation }) {
   const { image, images, imageCount, analysisData, timestamp } =
     route.params || {};
   const { setShowOverlay } = useAppContext();
+  const { t } = useTranslation();
 
   const {
     alertConfig,
@@ -117,7 +120,19 @@ export default function DetailsScreen({ route, navigation }) {
       const data = analysisData.data;
       console.log(data, 'datatatatatata');
       const priceData = data.price || {};
+      const specs = data.specs || {};
+      const normalizedDimensions =
+        data.dimensions ??
+        data.dimension ??
+        specs.dimensions ??
+        '';
 
+      const normalizedCO2 =
+        data.co2_emissions ??
+        data.co2_emission ??
+        data.co2 ??
+        specs.co2_emission ??
+        '';
       return {
         name: { value: data.name || 'Machine Name', editing: false },
         brand: { value: data.brand || 'Brand Name', editing: false },
@@ -169,8 +184,8 @@ export default function DetailsScreen({ route, navigation }) {
         reserve_price: { value: '', editing: false },
         item_location: { value: '', editing: false },
         sub_category: { value: '', editing: false },
-        dimensions: { value: '', editing: false },
-        co2_emission: { value: '', editing: false },
+        dimensions: { value: String(normalizedDimensions), editing: false },
+        co2_emission: { value: String(normalizedCO2), editing: false },
         product_cat: { value: '', editing: false },
         subcategory: { value: '', editing: false },
         form_type: { value: '', editing: false },
@@ -343,7 +358,7 @@ export default function DetailsScreen({ route, navigation }) {
       });
     }
   };
- const handleSubmitListing = async (formType) => {
+  const handleSubmitListing = async (formType) => {
     try {
       // Ensure product_title is provided
       if (!fields.name.value) {
@@ -401,9 +416,8 @@ export default function DetailsScreen({ route, navigation }) {
             const fileExtension =
               imageUri.split('.').pop()?.toLowerCase() || 'jpg';
             const fileName = `image_${index}.${fileExtension}`;
-            const mimeType = `image/${
-              fileExtension === 'jpg' ? 'jpeg' : fileExtension
-            }`;
+            const mimeType = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension
+              }`;
 
             formData.append('images[]', {
               uri: imageUri,
@@ -496,7 +510,7 @@ export default function DetailsScreen({ route, navigation }) {
           fields.max_reselling_price?.value || '0',
         );
       }
-
+      console.log(analysisData, 'fieldsfieldsfields')
       // Debug: Log FormData contents (React Native specific)
       console.log('📝 FormData contents:');
       if (formData._parts) {
@@ -515,7 +529,7 @@ export default function DetailsScreen({ route, navigation }) {
       const response = await apiService.submitProduct(formData);
 
       // console.log('✅ Submission successful:', response.data);
-      setIsSubmitting(false); 
+      setIsSubmitting(false);
 
       if (response.data) {
         showSuccess({
@@ -738,7 +752,7 @@ export default function DetailsScreen({ route, navigation }) {
                     style={[
                       styles.dropdownOption,
                       fields[key]?.value === option &&
-                        styles.dropdownOptionSelected,
+                      styles.dropdownOptionSelected,
                     ]}
                     onPress={() => selectDropdownOption(key, option)}
                   >
@@ -746,7 +760,7 @@ export default function DetailsScreen({ route, navigation }) {
                       style={[
                         styles.dropdownOptionText,
                         fields[key]?.value === option &&
-                          styles.dropdownOptionTextSelected,
+                        styles.dropdownOptionTextSelected,
                       ]}
                     >
                       {option}
@@ -850,7 +864,7 @@ export default function DetailsScreen({ route, navigation }) {
             </TouchableOpacity>
 
             <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Product Details</Text>
+              <Text style={styles.headerTitle}>{t('productDetail.title')}</Text>
               {selectedImages.length > 1 && (
                 <Text style={styles.headerSubtitle}>
                   {selectedImages.length} images analyzed
@@ -885,29 +899,29 @@ export default function DetailsScreen({ route, navigation }) {
       >
         {/* Images Section */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Product Images</Text>
+          <Text style={styles.sectionTitle}>{t('editProduct.sections.productImages')}</Text>
           {renderImageGallery()}
         </Animated.View>
 
         {/* Basic Information */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Basic Information</Text>
+          <Text style={styles.sectionTitle}>{t('editProduct.sections.basicInformation')}</Text>
           <View style={styles.card}>
-            {renderFieldInput('name', 'Equipment Name', 'tag')}
+            {renderFieldInput('name', `${t('productDetail.fields.productTitle')}`, 'tag')}
 
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
-                {renderFieldInput('model', 'Model', 'cpu')}
+                {renderFieldInput('model', `${t('productDetail.fields.model')}`, 'cpu')}
               </View>
             </View>
 
-            {renderFieldInput('year', 'Year', 'calendar', {
+            {renderFieldInput('year', `${t('productDetail.fields.manufacturingYear')}`, 'calendar', {
               keyboardType: 'numeric',
             })}
 
             {renderFieldInput(
               'equipment_description',
-              'Description',
+              `${t('productDetail.fields.description')}`,
               'file-text',
               {
                 multiline: true,
@@ -919,13 +933,13 @@ export default function DetailsScreen({ route, navigation }) {
 
         {/* Condition & Status */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Condition & Status</Text>
+          <Text style={styles.sectionTitle}> {t('productDetail.sections.conditionStatus')}</Text>
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
                 {renderDropdownField(
                   'condition',
-                  'Condition',
+                  `${t('productDetail.fields.itemCondition')}`,
                   'shield-check',
                   CONDITIONS,
                 )}
@@ -933,7 +947,7 @@ export default function DetailsScreen({ route, navigation }) {
               <View style={styles.fieldHalf}>
                 {renderDropdownField(
                   'operation_status',
-                  'Operation Status',
+                  `${t('productDetail.fields.operationStatus')}`,
                   'activity',
                   OPERATION_STATUS,
                 )}
@@ -944,29 +958,43 @@ export default function DetailsScreen({ route, navigation }) {
 
         {/* Pricing Information */}
         <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Pricing Information</Text>
+          <Text style={styles.sectionTitle}>{t('productDetail.sections.pricing')}</Text>
           <View style={styles.card}>
             <View style={styles.fieldRow}>
               <View style={styles.fieldHalf}>
                 {renderDropdownField(
                   'currency',
-                  'Currency',
+                  `${t('productDetail.fields.currency')}`,
                   'dollar-sign',
                   CURRENCIES,
                 )}
               </View>
               <View style={styles.fieldHalf}>
-                {renderPriceField('original_price', 'Price', 'tag', false)}
+                {renderPriceField('original_price', `${t('productDetail.fields.price')}`, 'tag', false)}
               </View>
             </View>
             {/* Market Analysis */}
-            {fields.reselling_price_value?.value &&
+            {/* {fields.reselling_price_value?.value &&
               Object.keys(fields.reselling_price_value.value).length > 0 && (
                 <EnhancedMarketAnalysis
                   priceData={fields.reselling_price_value.value}
                   currency={fields.currency?.value || 'USD'}
                 />
-              )}
+              )} */}
+            {/* Market Price Trends + Key Metrics */}
+            {analysisData?.data?.price?.reselling_price_history?.length ? (
+              <MarketPriceTrendsCard
+                priceData={{
+                  ...analysisData.data,     // for CO2/weight/dimensions
+                  ...analysisData.data.price,
+                }}
+                currency={fields.currency?.value || 'USD'}
+                COLORS={COLORS}
+                FONTS={FONTS}
+              />
+            ) : (
+              <Text style={styles.noDataText}>No market history available.</Text>
+            )}
           </View>
         </Animated.View>
 
@@ -998,7 +1026,7 @@ export default function DetailsScreen({ route, navigation }) {
             {isSubmitting ? (
               <>
                 <Icon name="loader" size={20} color="#fff" />
-                <Text style={styles.submitText}>Submitting...</Text>
+                <Text style={styles.submitText}>{t('submitting')}...</Text>
               </>
             ) : (
               <>
@@ -1008,7 +1036,7 @@ export default function DetailsScreen({ route, navigation }) {
                   color="#fff"
                 />
                 <Text style={styles.submitText}>
-                  {userToken ? 'Submit Listing' : 'Sign In & Submit'}
+                  {userToken ? `${t('market.submitListing', 'Submit Listing')}..` : 'Sign In & Submit'}
                 </Text>
               </>
             )}

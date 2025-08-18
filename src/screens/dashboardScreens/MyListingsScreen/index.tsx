@@ -46,7 +46,7 @@ export default function MyListingsScreen({ navigation }) {
   const currentLanguage = useSelector(selectCurrentLanguage);
   const isLanguageInitialized = useSelector(selectIsLanguageInitialized);
   const isLanguageLoading = useSelector(selectLanguageLoading);
-  const availableLanguages = useSelector(selectAvailableLanguages);
+  const availableLanguages = useSelector(selectAvailableLanguages) || [];
 
   // Local state
   const [activeMenuId, setActiveMenuId] = useState(null);
@@ -71,6 +71,9 @@ export default function MyListingsScreen({ navigation }) {
     state => state.auth || {},
   );
 
+  // Derived: language is busy (initializing or switching)
+  const isLangBusy = !isLanguageInitialized || isLanguageLoading;
+
   // Language handling functions
   const handleLanguageChange = async (languageCode) => {
     try {
@@ -87,21 +90,9 @@ export default function MyListingsScreen({ navigation }) {
   };
 
   const getLanguageShortName = (langCode) => {
-    const language = availableLanguages.find(lang => lang.code === langCode);
+    const language = availableLanguages?.find?.(lang => lang.code === langCode);
     return language?.shortName || 'EN';
   };
-
-  // Show loading if language is not initialized yet
-  if (!isLanguageInitialized || isLanguageLoading) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingText}>Initializing...</Text>
-        </View>
-      </View>
-    );
-  }
 
   // Fetch listings on component mount
   useEffect(() => {
@@ -127,6 +118,7 @@ export default function MyListingsScreen({ navigation }) {
         useNativeDriver: true,
       }),
     ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Focus listener to refetch data when returning to screen
@@ -186,6 +178,7 @@ export default function MyListingsScreen({ navigation }) {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchListings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleViewDetails = listing => {
@@ -369,17 +362,6 @@ export default function MyListingsScreen({ navigation }) {
 
   const currentListing = listings.find(item => item.ID === activeMenuId);
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingText}>{t('loadingListings')}</Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <>
       <StatusBar
@@ -414,17 +396,17 @@ export default function MyListingsScreen({ navigation }) {
             <View style={styles.headerTop}>
               <View style={styles.headerLeft}>
                 <Text style={styles.headerTitle}>{t('myListings')}</Text>
-                <View style={styles.headerBadge}>
+                {/* <View style={styles.headerBadge}>
                   <Icon name="package" size={14} color="#6b7280" />
                   <Text style={styles.headerSubtitle}>
                     {t('machinesListed', { count: listings.length })}
                   </Text>
-                </View>
+                </View> */}
               </View>
 
               <View style={styles.headerRight}>
                 {/* Language Toggle Button */}
-                {/* <TouchableOpacity
+                <TouchableOpacity
                   style={styles.languageButton}
                   onPress={() => setShowLanguageModal(true)}
                   activeOpacity={0.8}
@@ -438,7 +420,7 @@ export default function MyListingsScreen({ navigation }) {
                       {getLanguageShortName(currentLanguage)}
                     </Text>
                   )}
-                </TouchableOpacity> */}
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -502,9 +484,19 @@ export default function MyListingsScreen({ navigation }) {
           </Animated.View>
         </View>
 
-        {/* Listings Section */}
+        {/* Listings Section OR a centered initializing/loading state */}
         <View style={styles.listingContainer}>
-          {listings.length === 0 ? (
+          {isLangBusy ? (
+            <View style={[styles.centered, { paddingVertical: 40 }]}>
+              <ActivityIndicator size="large" color="#3b82f6" />
+              <Text style={styles.loadingText}>Initializing...</Text>
+            </View>
+          ) : loading ? (
+            <View style={[styles.centered, { paddingVertical: 40 }]}>
+              <ActivityIndicator size="large" color="#3b82f6" />
+              <Text style={styles.loadingText}>{t('loadingListings')}</Text>
+            </View>
+          ) : listings.length === 0 ? (
             <Animated.View
               style={[
                 styles.emptyState,
@@ -533,7 +525,7 @@ export default function MyListingsScreen({ navigation }) {
               </TouchableOpacity>
             </Animated.View>
           ) : (
-            listings.map((item, index) => {
+            listings.map((item) => {
               const statusColor = getStatusColor(item.status);
               const conditionColor = getConditionColor(
                 item.condition || item.item_condition,
@@ -570,14 +562,8 @@ export default function MyListingsScreen({ navigation }) {
                               'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400',
                           }}
                           style={styles.cardImage}
-                          resizeMode='contain'
+                          resizeMode="contain"
                         />
-                        {/* <View style={styles.imageOverlay}>
-                          <View style={styles.viewsBadge}>
-                            <Icon name="eye" size={12} color="#fff" />
-                            <Text style={styles.viewsText}>0</Text>
-                          </View>
-                        </View> */}
                       </View>
 
                       <View style={styles.cardBody}>
@@ -652,7 +638,7 @@ export default function MyListingsScreen({ navigation }) {
                             {item.price && (
                               <View style={styles.tag}>
                                 <Text style={styles.tagText}>
-                                  {item.currency || 'USD'} {""}
+                                  {item.currency || 'USD'}{' '}
                                   {item.price
                                     ? `${item.price}`
                                     : t('priceOnRequest')}
@@ -704,7 +690,7 @@ export default function MyListingsScreen({ navigation }) {
           <View style={styles.menuHandle} />
           <Text style={styles.languageModalTitle}>{t('language')}</Text>
           
-          {availableLanguages.map((language) => (
+          {availableLanguages?.map?.((language) => (
             <TouchableOpacity
               key={language.code}
               style={[
@@ -891,8 +877,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-       marginTop: scaleHeight(20),
-        marginBottom: scaleHeight(20),
+    marginTop: scaleHeight(20),
+    marginBottom: scaleHeight(20),
   },
   headerLeft: {
     flex: 1,
@@ -1117,7 +1103,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingHorizontal: 8,
     paddingBottom: 6,
-    // resizeMode: 'contain',
   },
   viewsBadge: {
     flexDirection: 'row',

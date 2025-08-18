@@ -15,6 +15,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import CustomDatePicker from './DatePicker';
 import TimePicker from './TimePicker';
+import { t } from 'i18next';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -62,7 +63,7 @@ interface CustomDateTimePickerProps {
 const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
   value,
   onChange,
-  placeholder = 'Select date & time',
+  placeholder = `${t('other.selectDateTime')}`,
   disabled = false,
   style,
   minDate,

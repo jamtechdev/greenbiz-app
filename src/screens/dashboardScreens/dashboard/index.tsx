@@ -242,69 +242,98 @@ export default function DashboardScreen({ navigation }) {
     });
   }, []);
 
+  // --- add this helper anywhere above analyzeImagesManually ---
+const readJsonSafe = async (res) => {
+  const contentType = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+  const text = await res.text();        // always read as text first
+  let data = null;
+  try {
+    data = JSON.parse(text);            // try to parse JSON
+  } catch (_) {
+    // Throw a readable error with diagnostics when it isn't JSON
+    const snippet = text.slice(0, 300).replace(/\s+/g, ' ').trim();
+    const statusLine = `${res.status} ${res.statusText || ''}`.trim();
+    throw new Error(
+      `Unexpected server response (${statusLine}). ` +
+      `Content-Type: ${contentType || 'unknown'}. ` +
+      `Body starts with: "${snippet}"`
+    );
+  }
+  return data;
+};
+
   // ---- Analyze (no manual Content-Type) ----
-  const analyzeImagesManually = useCallback(
-    async imagePaths => {
-      try {
-        setIsAnalyzing(true);
-        setAnalysisProgress(t('dashboard.processingImages'));
-        dispatch(clearAnalysis());
+// --- replace your analyzeImagesManually with this ---
+const analyzeImagesManually = useCallback(
+  async (imagePaths) => {
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress(t('dashboard.processingImages'));
+      dispatch(clearAnalysis());
 
-        const formData = new FormData();
-        imagePaths.forEach((uri, index) => {
-          formData.append('images[]', {
-            uri,
-            type: 'image/jpeg',
-            name: `image_${index}.jpg`,
-          });
+      const formData = new FormData();
+      imagePaths.forEach((uri, index) => {
+        formData.append('images[]', {
+          uri,
+          type: 'image/jpeg',
+          name: `image_${index}.jpg`,
         });
+      });
 
-        const response = await fetch(
-          'https://greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
-          {
-            method: 'POST',
-            // Let RN set the correct multipart boundary automatically
-            body: formData,
-          },
-        );
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setIsAnalyzing(false);
-          setShowOverlay(false);
-
-          navigation.navigate('Details', {
-            images: imagePaths,
-            imageCount: imagePaths.length,
-            analysisData: data,
-            timestamp: Date.now(),
-          });
-
-          if (authenticationStatus === 'authenticated') {
-            loadListings();
-          }
-        } else {
-          throw new Error(data?.message || 'Analysis failed');
+      const res = await fetch(
+        'https://greenbidz.com/wp-json/greenbidz-api/v1/analize_process_images',
+        {
+          method: 'POST',
+          // do NOT set Content-Type; RN will add the correct multipart boundary
+          headers: { Accept: 'application/json' },
+          body: formData,
         }
-      } catch (error) {
-        console.error('Analysis failed:', error);
-        setIsAnalyzing(false);
-        Alert.alert(
-          t('dashboard.analysisFailed'),
-          error.message || t('dashboard.analysisFailedMessage'),
-          [
-            {
-              text: t('dashboard.retry'),
-              onPress: () => analyzeImagesManually(imagePaths),
-            },
-            { text: t('cancel'), style: 'cancel' },
-          ],
-        );
+      );
+
+      // read as text first and parse safely
+      const data = await readJsonSafe(res);
+
+      // handle non-200 JSON responses as well
+      if (!res.ok || data?.success === false) {
+        const msg =
+          data?.message ||
+          (res.status === 413
+            ? 'Files are too large for the server.'
+            : `Request failed with status ${res.status}`);
+        throw new Error(msg);
       }
-    },
-    [t, dispatch, setShowOverlay, navigation, authenticationStatus, loadListings],
-  );
+
+      // success
+      setIsAnalyzing(false);
+      setShowOverlay(false);
+
+      navigation.navigate('Details', {
+        images: imagePaths,
+        imageCount: imagePaths.length,
+        analysisData: data,
+        timestamp: Date.now(),
+      });
+
+      if (authenticationStatus === 'authenticated') {
+        loadListings();
+      }
+    } catch (error) {
+      console.error('Analysis failed:', error);
+      setIsAnalyzing(false);
+
+      // Show a helpful message (includes server diagnostics if it wasn’t JSON)
+      Alert.alert(
+        t('dashboard.analysisFailed'),
+        error?.message || t('dashboard.analysisFailedMessage'),
+        [
+          { text: t('dashboard.retry'), onPress: () => analyzeImagesManually(imagePaths) },
+          { text: t('cancel'), style: 'cancel' },
+        ]
+      );
+    }
+  },
+  [t, dispatch, setShowOverlay, navigation, authenticationStatus, loadListings]
+);
 
   // ---- When user accepts images ----
   const handleImagesComplete = useCallback(
