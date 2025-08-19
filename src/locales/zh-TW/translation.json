@@ -546,6 +546,26 @@
         "startingPriceHint": "設定有競爭力的起標價以吸引投標者",
         "basedOnListingCurrency": "以刊登貨幣為準",
         "groupSimilarItemsHint": "將相似項目分組以提升可見度",
-        "selectDateTime": "選擇日期與時間"
-    }
+        "selectDateTime": "選擇日期與時間",
+        "saveAuction": "儲存拍賣"
+    },
+     "dateTime": {
+    "selectDate": "選擇日期",
+    "selectTime": "選擇時間",
+    "selectDateTime": "選擇日期與時間",
+    "invalidDateTime": "請選擇有效的日期與時間",
+    "cancel": "取消",
+    "confirm": "確定",
+    "date": "日期",
+    "time": "時間",
+    "now": "現在",
+    "pleaseSelectValidDateTime": "請選擇有效的日期與時間",
+     "selectYear": "選擇年份",
+    "selectMonth": "選擇月份",
+     "clear": "清除",
+    "today": "今天",
+    "hour": "小時",
+    "min": "分鐘"
+
+  }
 }

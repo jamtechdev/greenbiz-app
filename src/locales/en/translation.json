@@ -538,11 +538,30 @@
         "filesUploaded": "{{count}} files uploaded",
         "environmentalImpactInfo": "Optional: Environmental impact information"
     },
-       "other" : {
+    "other": {
         "minAcceptablePriceLabel": "Minimum price you'll accept for the item",
         "startingPriceHint": "Set a competitive starting price to attract bidders",
-         "basedOnListingCurrency": "Based on listing currency",
-         "groupSimilarItemsHint": "Group similar items together for better visibility",
-         "selectDateTime": "Select date & time"
+        "basedOnListingCurrency": "Based on listing currency",
+        "groupSimilarItemsHint": "Group similar items together for better visibility",
+        "selectDateTime": "Select date & time",
+        "saveAuction": "Save Aucion"
+    },
+    "dateTime": {
+        "selectDate": "Select Date",
+        "selectTime": "Select Time",
+        "selectDateTime": "Select Date & Time",
+        "invalidDateTime": "Please select a valid date and time",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "date": "Date",
+        "time": "Time",
+        "now": "Now",
+        "pleaseSelectValidDateTime": "Please select a valid date and time",
+        "selectYear": "Select Year",
+        "selectMonth": "Select Month",
+        "clear": "Clear",
+        "today": "Today",
+        "hour": "Hour",
+        "min": "Min"
     }
 }

@@ -1,3 +1,4 @@
+import { t } from 'i18next';
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -316,16 +317,16 @@ const TimePicker: React.FC<TimePickerProps> = ({
             >
               <TouchableOpacity activeOpacity={1}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Select Time</Text>
+                  <Text style={styles.modalTitle}>{t('dateTime.selectTime')}</Text>
                   <TouchableOpacity onPress={handleCancel} style={styles.closeButton}>
                     <Icon name="x" size={24} color={COLORS.textSecondary} />
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.pickerRow}>
-                  {renderColumn(hours, selectedHour, setSelectedHour, hourFlatListRef, 'Hour')}
+                  {renderColumn(hours, selectedHour, setSelectedHour, hourFlatListRef, `${t('dateTime.hour')}`)}
                   <View style={styles.separator} />
-                  {renderColumn(minutes, selectedMinute, setSelectedMinute, minuteFlatListRef, 'Min')}
+                  {renderColumn(minutes, selectedMinute, setSelectedMinute, minuteFlatListRef, `${t('dateTime.min')}`)}
                   <View style={styles.separator} />
                   {renderColumn(meridiems, selectedMeridiem, setSelectedMeridiem, meridiemFlatListRef, '')}
                 </View>
@@ -336,7 +337,7 @@ const TimePicker: React.FC<TimePickerProps> = ({
                     onPress={handleCancel}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                    <Text style={styles.cancelButtonText}>{t('dateTime.cancel')}</Text>
                   </TouchableOpacity>
                   
                   <TouchableOpacity
@@ -344,7 +345,7 @@ const TimePicker: React.FC<TimePickerProps> = ({
                     onPress={handleConfirm}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.confirmButtonText}>Confirm</Text>
+                    <Text style={styles.confirmButtonText}>{t('dateTime.confirm')}</Text>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>

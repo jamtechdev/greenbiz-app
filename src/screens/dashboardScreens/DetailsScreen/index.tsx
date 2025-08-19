@@ -28,6 +28,8 @@ import EnhancedMarketAnalysis from '../../../components/EnhancedMarketAnalysis';
 import { scaleFont, scaleHeight, scaleWidth } from '../../../utils/resposive';
 import MarketPriceTrendsCard from '../../../components/MarketPriceTrendsCard';
 import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
+import { selectCurrentLanguage } from '../../../store/slices/languageSlice';
 
 const { width, height } = Dimensions.get('window');
 
@@ -58,16 +60,6 @@ const FONTS = {
   light: 'Poppins-Light',
 };
 
-// Dropdown options
-const CONDITIONS = [
-  'New/Unused',
-  'Like New',
-  'Used',
-  'Used, Needs Minor Repair',
-];
-
-const OPERATION_STATUS = ['Running', 'Idle', 'Down', "Functional"];
-
 const CURRENCIES = [
   'USD ($)',
   'CNY (¥)',
@@ -88,6 +80,23 @@ export default function DetailsScreen({ route, navigation }) {
     route.params || {};
   const { setShowOverlay } = useAppContext();
   const { t } = useTranslation();
+  const currentLanguage = useSelector(selectCurrentLanguage);
+
+  // Dropdown options
+  const CONDITIONS = [
+    `${t('editProduct.conditions.newUnused')}`,
+    `${t('editProduct.conditions.likeNew')}`,
+    `${t('editProduct.conditions.used')}`,
+    `${t('editProduct.conditions.usedNeedsRepair')}`,
+  ];
+
+  const OPERATION_STATUS =
+    [
+      `${t('editProduct.operationStatus.running')}`,
+      `${t('editProduct.operationStatus.idle')}`,
+      `${t('editProduct.operationStatus.down')}`,
+      `${t('editProduct.operationStatus.fullyFunctional')}`,
+    ];
 
   const {
     alertConfig,
@@ -406,6 +415,7 @@ export default function DetailsScreen({ route, navigation }) {
       formData.append('form_type', formType);
       // formData.append('form_type',fields?.form_type?.value ||"save_later")
       formData.append('currency', fields.currency?.value || 'USD');
+      formData.append('language', currentLanguage || 'en')
 
       // Handle images - Use consistent field naming
       if (selectedImages && selectedImages.length > 0) {
@@ -510,7 +520,7 @@ export default function DetailsScreen({ route, navigation }) {
           fields.max_reselling_price?.value || '0',
         );
       }
-      console.log(analysisData, 'fieldsfieldsfields')
+      // console.log(analysisData, 'fieldsfieldsfields')
       // Debug: Log FormData contents (React Native specific)
       console.log('📝 FormData contents:');
       if (formData._parts) {
@@ -523,7 +533,7 @@ export default function DetailsScreen({ route, navigation }) {
           );
         });
       }
-      // console.log(formData, 'formDataformDataformDataformData');
+      console.log(formData, 'formDataformDataformDataformData');
 
       // Submit using the corrected saveProduct method
       const response = await apiService.submitProduct(formData);

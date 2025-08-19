@@ -59,7 +59,7 @@ export default function DashboardScreen({ navigation }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [hasAutoOpenedOverlay, setHasAutoOpenedOverlay] = useState(false);
   const [authenticationStatus, setAuthenticationStatus] = useState('checking'); // 'checking' | 'authenticated' | 'unauthenticated'
-
+console.log(listings)
   // Refs
   const carouselRef = useRef(null);
   // Selectors
@@ -149,8 +149,8 @@ export default function DashboardScreen({ navigation }) {
       setIsLoadingListings(true);
       setError(null);
 
-      const response = await apiService.getAllListing();
-
+      const response = await apiService.getAllListing(currentLanguage);
+      console.log(response,'mylistmylistmylistmylist')
       if (
         response?.data &&
         response.data.success &&
@@ -197,7 +197,7 @@ export default function DashboardScreen({ navigation }) {
       await loadListings();
     }
     setRefreshing(false);
-  }, [checkAuthenticationStatus, loadListings]);
+  }, [checkAuthenticationStatus, loadListings,currentLanguage]);
 
   // ---- Pickers ----
   const handleGalleryPick = useCallback(() => {

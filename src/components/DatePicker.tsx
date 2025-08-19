@@ -1,3 +1,4 @@
+import { t } from 'i18next';
 import React, { useState } from 'react';
 import {
   View,
@@ -12,7 +13,6 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 
 const { width } = Dimensions.get('window');
-
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -23,7 +23,7 @@ const monthsShort = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-const CustomDatePicker = ({ value, onChange, placeholder = "Select date" }) => {
+const CustomDatePicker = ({ value, onChange, placeholder }) => {
   const today = new Date();
   const [visible, setVisible] = useState(false);
   const [mode, setMode] = useState('day');
@@ -134,7 +134,7 @@ const CustomDatePicker = ({ value, onChange, placeholder = "Select date" }) => {
   const renderYears = () => {
     const startYear = currentYear - 6;
     const years = Array.from({ length: 12 }, (_, i) => startYear + i);
-    
+
     return (
       <ScrollView style={styles.yearScroll} showsVerticalScrollIndicator={false}>
         <View style={styles.yearGrid}>
@@ -203,14 +203,14 @@ const CustomDatePicker = ({ value, onChange, placeholder = "Select date" }) => {
         {weeks.map((week, weekIndex) => (
           <View key={weekIndex} style={styles.weekRow}>
             {week.map((day, dayIndex) => {
-              const isSelected = 
+              const isSelected =
                 selectedDate &&
                 day &&
                 selectedDate.getDate() === parseInt(day, 10) &&
                 selectedDate.getMonth() === currentMonth &&
                 selectedDate.getFullYear() === currentYear;
 
-              const isToday = 
+              const isToday =
                 day &&
                 today.getDate() === parseInt(day, 10) &&
                 today.getMonth() === currentMonth &&
@@ -263,20 +263,20 @@ const CustomDatePicker = ({ value, onChange, placeholder = "Select date" }) => {
       </TouchableOpacity>
 
       {/* Date Picker Modal */}
-      <Modal 
-        visible={visible} 
-        transparent 
+      <Modal
+        visible={visible}
+        transparent
         animationType="fade"
         onRequestClose={closeModal}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.modalBackground}
             activeOpacity={1}
             onPress={closeModal}
           />
-          
-          <Animated.View 
+
+          <Animated.View
             style={[
               styles.calendarModal,
               {
@@ -297,8 +297,8 @@ const CustomDatePicker = ({ value, onChange, placeholder = "Select date" }) => {
                   <Icon name="calendar" size={18} color="#6366f1" />
                 </View>
                 <Text style={styles.modalTitle}>
-                  {mode === 'day' ? 'Select Date' : 
-                   mode === 'month' ? 'Select Month' : 'Select Year'}
+                  {mode === 'day' ? `${t('dateTime.date')}` :
+                    mode === 'month' ? `${t('dateTime.selectMonth')}` : `${t('dateTime.selectYear')}`}
                 </Text>
               </View>
               <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
@@ -311,19 +311,19 @@ const CustomDatePicker = ({ value, onChange, placeholder = "Select date" }) => {
               <TouchableOpacity style={styles.navButton} onPress={goPrev}>
                 <Icon name="chevron-left" size={18} color="#374151" />
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.monthYearButton}
                 onPress={() => setMode(mode === 'day' ? 'month' : mode === 'month' ? 'year' : 'day')}
               >
                 <Text style={styles.monthYearText}>
                   {mode === 'day' ? `${months[currentMonth]} ${currentYear}` :
-                   mode === 'month' ? currentYear :
-                   `${currentYear - 6} - ${currentYear + 5}`}
+                    mode === 'month' ? currentYear :
+                      `${currentYear - 6} - ${currentYear + 5}`}
                 </Text>
                 <Icon name="chevron-down" size={14} color="#6b7280" />
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.navButton} onPress={goNext}>
                 <Icon name="chevron-right" size={18} color="#374151" />
               </TouchableOpacity>
@@ -340,12 +340,12 @@ const CustomDatePicker = ({ value, onChange, placeholder = "Select date" }) => {
             <View style={styles.modalFooter}>
               <TouchableOpacity style={styles.footerButton} onPress={clearDate}>
                 <Icon name="x-circle" size={16} color="#6b7280" />
-                <Text style={styles.footerButtonText}>Clear</Text>
+                <Text style={styles.footerButtonText}>{t('dateTime.clear')}</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.footerButton} onPress={selectToday}>
                 <Icon name="calendar" size={16} color="#6366f1" />
-                <Text style={[styles.footerButtonText, styles.todayButtonText]}>Today</Text>
+                <Text style={[styles.footerButtonText, styles.todayButtonText]}>{t('dateTime.today')}</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>

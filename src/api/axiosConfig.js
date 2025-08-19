@@ -462,7 +462,7 @@ export const apiService = {
   // Product methods
   getProducts: (params = {}) => apiService.get('/products', { params }),
   getProduct: id => apiService.get(`/products/${id}`),
-  getAllListing: () => apiService.get('/my-products'),
+  getAllListing: (currentLanguage) => apiService.get('/my-products',{ params: { language: currentLanguage } }),
 
   // Image analysis
   analyzeImage: imageData =>

@@ -498,11 +498,11 @@ export default function ProductDetailScreen({ route, navigation }) {
             </View>
           </View>
           
-          <DisplayField
+          {/* <DisplayField
             label={t('productDetail.auction.bidIncrement')}
             value={productData.auction_increment ? `${productData.currency} ${productData.auction_increment}` : t('productDetail.notSpecified')}
             icon="trending-up"
-          />
+          /> */}
           
           <View style={styles.fieldRow}>
             <View style={styles.fieldHalf}>

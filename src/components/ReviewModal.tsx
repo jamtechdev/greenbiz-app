@@ -180,7 +180,7 @@ export default function DetailModal({
     try {
       setLoadingCategories(true);
       const response = await apiService.getCategories(currentLanguage);
-      console.log(currentLanguage ,'kja')
+      // console.log(currentLanguage ,'kja')
 
       console.log('Categories API Response:', response.data ,'asdsadasd');
 
@@ -1087,7 +1087,7 @@ export default function DetailModal({
                       }
                       onSelect={handleAuctionGroupChange}
                       placeholder="Select auction group"
-                      label="Auction Group"
+                      label={`${t('productDetail.auction.auctionGroup')}`}
                       loading={loadingAuctionGroups}
                     />
                   )}
@@ -1129,7 +1129,7 @@ export default function DetailModal({
                         handleFieldChange('auction_currency', stringValue);
                       }}
                       placeholder="Select currency"
-                      label="Auction Currency"
+                      label={`${t('editProduct.fields.auctionCurrency')}`}
                       hasError={!!validationErrors.auction_currency}
                     />
                     {fields.currency?.value && (
@@ -1423,8 +1423,8 @@ export default function DetailModal({
                   ]}
                 >
                   {isSubmitting && submissionType === 'submit_auction'
-                    ? 'Submitting...'
-                    : 'Save Auction'}
+                    ? `${t('review.submitting')}`
+                    : `${t('other.saveAuction')}`}
                 </Text>
               </TouchableOpacity>
             )}

@@ -434,10 +434,10 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>
                     {mode === 'date'
-                      ? 'Select Date'
+                      ? `${t('dateTime.date')}`
                       : mode === 'time'
-                      ? 'Select Time'
-                      : 'Select Date & Time'}
+                      ? `${t('dateTime.time')}`
+                      : `${t('dateTime.selectDateTime')}`}
                   </Text>
                   <View style={styles.headerActions}>
                     <TouchableOpacity
@@ -446,7 +446,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                       <Icon name="clock" size={16} color={COLORS.primary} />
-                      <Text style={styles.nowButtonText}>Now</Text>
+                      <Text style={styles.nowButtonText}>{t('dateTime.now')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleCancel}
@@ -460,8 +460,8 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
 
                 {mode === 'datetime' && (
                   <View style={styles.tabContainer}>
-                    {renderTabButton('date', 'calendar', 'Date')}
-                    {renderTabButton('time', 'clock', 'Time')}
+                    {renderTabButton('date', 'calendar', `${t('dateTime.date')}`)}
+                    {renderTabButton('time', 'clock', `${t('dateTime.time')}`)}
                   </View>
                 )}
 
@@ -478,6 +478,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                         onChange={setSelectedDate}
                         minDate={minDate}
                         maxDate={maxDate}
+                        placeholder={t('dateTime.selectDate')}
                       />
                     </View>
                   )}
@@ -507,7 +508,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                   >
                     {canConfirm
                       ? formatDateTime(selectedDate, selectedTime)
-                      : 'Please select a valid date and time'}
+                      : `${t('dateTime.pleaseSelectValidDateTime')}`}
                   </Text>
                 </View>
 
@@ -518,7 +519,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                     activeOpacity={0.8}
                   >
                     <Icon name="x" size={16} color={COLORS.textSecondary} />
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                    <Text style={styles.cancelButtonText}>{t('dateTime.cancel')}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -538,7 +539,7 @@ const CustomDateTimePicker: React.FC<CustomDateTimePickerProps> = ({
                         !canConfirm && styles.confirmButtonTextDisabled,
                       ]}
                     >
-                      Confirm
+                      {t('dateTime.confirm')}
                     </Text>
                   </TouchableOpacity>
                 </View>

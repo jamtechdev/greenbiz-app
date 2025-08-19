@@ -609,7 +609,7 @@ export default function MyListingsScreen({ navigation }) {
                                       { color: '#0277bd' },
                                     ]}
                                   >
-                                    {productType}
+                                    {/* {productType} */}
                                   </Text>
                                 </View>
                               )}
