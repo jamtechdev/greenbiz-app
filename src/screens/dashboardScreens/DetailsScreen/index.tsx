@@ -522,6 +522,7 @@ export default function DetailsScreen({ route, navigation }) {
       }
       // console.log(analysisData, 'fieldsfieldsfields')
       // Debug: Log FormData contents (React Native specific)
+      // Debug: Log FormData contents (React Native specific)
       console.log('📝 FormData contents:');
       if (formData._parts) {
         formData._parts.forEach(([key, value]) => {
